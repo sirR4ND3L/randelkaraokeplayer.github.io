@@ -1,9 +1,9 @@
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "Randel YouTube Karaoke Player",
+  "name": "Randel Karaoke Player",
   "alternateName": "Randel Karaoke",
-  "url": "https://sirr4nd3l.github.io/randelyoutubekaraoke.github.io/",
+  "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
   "applicationCategory": "MultimediaApplication",
   "applicationSubCategory": "Karaoke Player",
   "operatingSystem": "All",
