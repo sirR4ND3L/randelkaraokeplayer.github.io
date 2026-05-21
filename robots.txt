@@ -3,5 +3,5 @@ User-agent: *
 Allow: /
 
 # Host & Sitemap Declarations
-Host: https://sirr4nd3l.github.io/randelyoutubekaraoke.github.io/
-Sitemap: https://sirr4nd3l.github.io/randelyoutubekaraoke.github.io/sitemap.xml
+Host: https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/
+Sitemap: https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/sitemap.xml
