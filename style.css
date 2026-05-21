@@ -759,6 +759,11 @@ button.cancel-btn:hover {
     gap: 16px;
 }
 
+.sr-only {
+    position: absolute;
+    left: -9999px;
+}
+
 .visible-title {
     font-size: clamp(24px, 5vw, 40px);
     font-weight: 700;
