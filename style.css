@@ -759,7 +759,11 @@ button.cancel-btn:hover {
     gap: 16px;
 }
 
-.sr-only {
-    position: absolute;
-    left: -9999px;
+.visible-title {
+    font-size: clamp(24px, 5vw, 40px);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    /* Optional: add a subtle glow to match your UI theme */
+    text-shadow: 0 0 20px rgba(0, 122, 255, 0.5);
 }
