@@ -172,6 +172,7 @@ button {
     align-items: center;
     gap: 8px;
     outline: none;
+    touch-action: manipulation;
 }
 
 button:focus-visible {
@@ -403,23 +404,39 @@ button.mic-status.active {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 16px;
+    gap: 12px;
     width: 100%;
 }
 
+.button-row button {
+    flex: 1 1 150px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+}
+
 @media (max-width: 600px) {
-    .right-panel { position: static; }
+    .right-panel { 
+        position: static; 
+    }
     
     .button-row {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, 1fr); /* Forces exactly 2 columns */
         gap: 12px;
     }
+    
     .button-row button {
-        width: 100%;
-        justify-content: center;
+        flex: none; /* Resets the flex property so it doesn't conflict with Grid */
+        width: 100%; /* Ensures the button fills the grid cell */
+        margin: 0;   /* Clears any accidental margins */
     }
-    .shortcuts-legend { display: none; }
+    
+    .shortcuts-legend { 
+        display: none; 
+    }
 }
 
 .volume-control {
