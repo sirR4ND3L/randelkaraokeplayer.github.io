@@ -17,6 +17,8 @@
 * {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -29,7 +31,6 @@ body {
     align-items: center;
     min-height: 100vh;
     overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
 }
 
 .bg-blobs {
@@ -42,6 +43,7 @@ body {
     overflow: hidden;
     filter: blur(80px);
     opacity: 0.4;
+    will-change: transform;
 }
 
 .blob {
@@ -54,6 +56,7 @@ body {
     left: -20%;
     top: -20%;
     opacity: 0.5;
+    will-change: transform;
 }
 
 .blob:nth-child(2) {
@@ -143,14 +146,11 @@ body {
 
 .glass-panel {
     background: var(--glass-bg);
-    backdrop-filter: blur(40px);
+    backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(40px);
     border: 1px solid var(--glass-border);
     border-radius: 32px;
     box-shadow: var(--panel-shadow);
-    transition: var(--transition-smooth);
-    position: relative;
-    overflow: hidden;
 }
 
 .glass-panel:hover {
@@ -167,13 +167,15 @@ button {
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     transition: var(--transition-smooth);
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
+    outline: none;
+}
+
+button:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-color);
 }
 
 button:hover {
@@ -205,7 +207,6 @@ button.primary:hover {
     align-items: center;
     gap: 24px;
     padding: 0 20px 40px;
-    box-sizing: border-box;
 }
 
 @media (min-width: 1000px) {
@@ -407,6 +408,8 @@ button.mic-status.active {
 }
 
 @media (max-width: 600px) {
+    .right-panel { position: static; }
+    
     .button-row {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -414,12 +417,9 @@ button.mic-status.active {
     }
     .button-row button {
         width: 100%;
-        font-size: 13px;
-        padding: 12px;
+        justify-content: center;
     }
-    .button-row .cancel-btn {
-        grid-column: span 2;
-    }
+    .shortcuts-legend { display: none; }
 }
 
 .volume-control {
@@ -778,4 +778,19 @@ button.cancel-btn:hover {
     margin-bottom: 10px;
     /* Optional: add a subtle glow to match your UI theme */
     text-shadow: 0 0 20px rgba(0, 122, 255, 0.5);
+}
+
+@media print {
+    body { background: white; color: black; }
+    .glass-panel { border: 1px solid #ccc; box-shadow: none; }
+    .bg-blobs, .dynamic-island { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
