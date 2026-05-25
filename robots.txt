@@ -2,6 +2,5 @@
 User-agent: *
 Allow: /
 
-# Host & Sitemap Declarations
-Host: https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/
+# Sitemap Declaration
 Sitemap: https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/sitemap.xml
