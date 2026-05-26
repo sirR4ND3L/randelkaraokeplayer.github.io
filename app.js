@@ -757,12 +757,9 @@ document.addEventListener('keydown', function (event) {
     }
 
     function detectAndApply() {
-        // Use the smaller of CSS viewport width and physical CSS-equivalent (screen.width / dpr)
-        const cssW = window.innerWidth || document.documentElement.clientWidth || screen.width;
-        const physCssW = (screen.width && window.devicePixelRatio) ? Math.round(screen.width / window.devicePixelRatio) : cssW;
-        const chosen = Math.min(cssW, physCssW);
-        applyMobileVariables(chosen);
-    }
+    const chosen = window.innerWidth || document.documentElement.clientWidth || screen.width || 375;
+    applyMobileVariables(chosen);
+}
 
     // Throttle resize calls
     let resizeTimer = null;
