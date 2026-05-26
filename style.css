@@ -2,6 +2,12 @@
 
 :root {
     --bg-color: #030303;
+    /* Responsive sizing variables (updated via JS for precise device detection) */
+    --mobile-button-size: 44px;
+    --mobile-icon-size: 18px;
+    --mobile-song-thumb-width: 60px;
+    --mobile-song-thumb-height: 45px;
+    --mobile-score-number-size: 120px;
     --glass-bg: rgba(255, 255, 255, 0.03);
     --glass-border: rgba(255, 255, 255, 0.1);
     --accent-color: #007aff;
@@ -869,8 +875,8 @@ button.cancel-btn:hover {
         width: 100% !important;
     }
     .button-row button {
-        width: 44px !important;
-        height: 44px !important;
+        width: var(--mobile-button-size, 44px) !important;
+        height: var(--mobile-button-size, 44px) !important;
         padding: 0 !important;
         border-radius: 50% !important; /* Premium circular design */
         font-size: 0 !important; /* Hide text nodes seamlessly */
@@ -883,7 +889,7 @@ button.cancel-btn:hover {
         top: 50% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) !important; /* Perfect dead-centering */
-        font-size: 18px !important;
+        font-size: var(--mobile-icon-size, 18px) !important;
         margin: 0 !important;
         line-height: 1 !important;
         display: flex !important;
@@ -1197,8 +1203,8 @@ button.cancel-btn:hover {
         gap: 10px;
     }
     .song-thumb {
-        width: 50px;
-        height: 38px;
+        width: var(--mobile-song-thumb-width, 50px);
+        height: var(--mobile-song-thumb-height, 38px);
     }
     .song-title {
         font-size: 12px;
@@ -1211,11 +1217,11 @@ button.cancel-btn:hover {
         gap: 8px !important;
     }
     .button-row button {
-        width: 40px !important;
-        height: 40px !important;
+        width: calc(var(--mobile-button-size, 44px) - 4px) !important;
+        height: calc(var(--mobile-button-size, 44px) - 4px) !important;
     }
     .button-row button .icon {
-        font-size: 16px !important;
+        font-size: calc(var(--mobile-icon-size, 18px) - 2px) !important;
     }
     
     button.mic-status {
@@ -1248,7 +1254,7 @@ button.cancel-btn:hover {
         margin-bottom: 2px !important;
     }
     .score-number {
-        font-size: 52px !important;
+        font-size: calc(var(--mobile-score-number-size, 64px) * 0.8125) !important; /* fallback to ~52px */
         margin: 4px 0 !important;
     }
     .score-message {
