@@ -352,7 +352,7 @@ async function toggleVisualizer() {
         if (micStream) micStream.getTracks().forEach(track => track.stop());
         visualizerInitialized = false;
         statusEl.classList.remove('active');
-        textEl.innerText = "Mic Scoring: Off";
+        textEl.innerText = "Mic: Off";
         scoreMeter.style.display = "none";
         liveBadge.style.display = "none";
         return;
@@ -376,7 +376,7 @@ async function toggleVisualizer() {
         
         visualizerInitialized = true;
         statusEl.classList.add('active');
-        textEl.innerText = "Mic: Scoring Active";
+        textEl.innerText = "Mic: On";
         scoreMeter.style.display = "flex";
         liveBadge.style.display = "flex";
         
