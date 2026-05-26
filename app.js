@@ -728,3 +728,52 @@ document.addEventListener('keydown', function (event) {
         case 'f': toggleFullscreen(); break;
     }
 });
+
+
+/* Automatic display detection: updates CSS variables to better match actual device width/DPR */
+(function(){
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    function applyMobileVariables(width) {
+        const base = 375; // design reference width
+        const ratio = clamp(width / base, 0.6, 1);
+
+        const buttonSize = Math.round(clamp(44 * ratio, 34, 52));
+        const iconSize = Math.round(clamp(buttonSize * 0.45, 12, 22));
+        const thumbW = Math.round(clamp(60 * ratio, 40, 72));
+        const thumbH = Math.round(clamp(45 * ratio, 30, 54));
+        const scoreNumber = Math.round(clamp(120 * ratio, 40, 120));
+
+        const root = document.documentElement;
+        root.style.setProperty('--mobile-button-size', buttonSize + 'px');
+        root.style.setProperty('--mobile-icon-size', iconSize + 'px');
+        root.style.setProperty('--mobile-song-thumb-width', thumbW + 'px');
+        root.style.setProperty('--mobile-song-thumb-height', thumbH + 'px');
+        root.style.setProperty('--mobile-score-number-size', scoreNumber + 'px');
+
+        // expose read-only vars for debugging / custom rules if needed
+        root.style.setProperty('--detected-viewport-width', Math.round(width) + 'px');
+        root.style.setProperty('--detected-device-dpr', (window.devicePixelRatio || 1).toString());
+    }
+
+    function detectAndApply() {
+        // Use the smaller of CSS viewport width and physical CSS-equivalent (screen.width / dpr)
+        const cssW = window.innerWidth || document.documentElement.clientWidth || screen.width;
+        const physCssW = (screen.width && window.devicePixelRatio) ? Math.round(screen.width / window.devicePixelRatio) : cssW;
+        const chosen = Math.min(cssW, physCssW);
+        applyMobileVariables(chosen);
+    }
+
+    // Throttle resize calls
+    let resizeTimer = null;
+    function schedule() {
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => { detectAndApply(); resizeTimer = null; }, 120);
+    }
+
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
+    document.addEventListener('DOMContentLoaded', detectAndApply);
+    // Run immediately in case script is loaded after DOM
+    detectAndApply();
+})();
