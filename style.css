@@ -1148,6 +1148,7 @@ button.cancel-btn:hover {
     font-family: 'Outfit', sans-serif !important;
 }
 
+
 /* 5. Ultra-Compact Small Mobile (Viewport Width < 345px) */
 @media (max-width: 345px) {
     .header-container {
@@ -1267,6 +1268,105 @@ button.cancel-btn:hover {
     .score-actions button {
         padding: 6px 12px !important;
         font-size: 10px !important;
+        border-radius: 10px !important;
+    }
+}
+
+/* 6. Ultra-Compact Micro Mobile (Viewport Width < 285px) */
+@media (max-width: 285px) {
+    .header-container {
+        top: 4px;
+        margin-bottom: 6px;
+        padding: 0 6px;
+    }
+    .dynamic-island {
+        padding: 4px 12px;
+        min-width: 100px;
+        border-radius: 28px;
+    }
+    .dynamic-island h2 {
+        font-size: 9px;
+        gap: 4px;
+    }
+    .search-container {
+        margin-bottom: 10px;
+        padding: 4px;
+        border-radius: 14px;
+        gap: 3px;
+    }
+    #searchInput {
+        padding: 5px 8px;
+        font-size: 12px;
+    }
+    .search-container button {
+        padding: 6px 10px;
+        font-size: 6px;
+        border-radius: 14px;
+    }
+    .controls {
+        padding: 10px !important;
+        gap: 10px !important;
+    }
+    .queue-container {
+        padding: 10px;
+        border-radius: 18px;
+    }
+    .queue-container h3 {
+        font-size: 13px;
+    }
+    .queue-list li {
+        padding: 8px;
+        gap: 8px;
+    }
+    .song-thumb {
+        width: 42px;
+        height: 32px;
+    }
+    .song-title {
+        font-size: 11px;
+    }
+    .song-meta {
+        font-size: 9px;
+    }
+    .button-row {
+        gap: 6px !important;
+    }
+    .button-row button {
+        width: calc(var(--mobile-button-size, 44px) - 10px) !important;
+        height: calc(var(--mobile-button-size, 44px) - 10px) !important;
+    }
+    .button-row button .icon {
+        font-size: calc(var(--mobile-icon-size, 18px) - 4px) !important;
+    }
+    button.mic-status {
+        top: 6px;
+        right: 6px;
+        font-size: 7px;
+        padding: 4px 8px;
+    }
+    .live-score-badge {
+        top: 6px;
+        left: 6px;
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-size: 9px;
+    }
+    .live-score-badge .value {
+        font-size: 12px;
+    }
+    .score-bar-bg {
+        width: 26px;
+        height: 2px;
+    }
+    .score-number {
+        font-size: 48px !important;
+    }
+    .score-message {
+        font-size: 10px !important;
+    }
+    .score-actions button {
+        padding: 6px 10px !important;
+        font-size: 9px !important;
         border-radius: 10px !important;
     }
 }
