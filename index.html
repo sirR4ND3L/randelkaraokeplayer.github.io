@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <title>Randel Karaoke Player</title>
-    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="ePFt2UUkXFAh6d16SjqsElduTBudJ0phfoU3h4g8a28" />
     <link rel="canonical" href="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/">
@@ -26,12 +29,14 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebApplication",
+      "@type": "WebSite",
       "name": "Randel Karaoke Player",
       "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
-      "description": "A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.",
-      "applicationCategory": "EntertainmentApplication",
-      "operatingSystem": "All"
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
     }
     </script>
 </head>
