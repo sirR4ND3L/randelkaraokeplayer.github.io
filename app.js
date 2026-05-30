@@ -1,754 +1,508 @@
-// Load YouTube IFrame API
-var tag = document.createElement('script');
-tag.src = "https://www.youtube.com/iframe_api";
-document.body.appendChild(tag);
+/**
+ * Karaoke Pro - Next-Gen Experience
+ * Refactored for Robustness and Maintainability
+ */
 
-var player;
-var songQueue = [];
-
-const SOUND_EFFECTS = {
-    CHEER: "scoreSound.mp3",
-    SUCCESS: "scoreSound.mp3",
-    FAIL: "scoreSound.mp3"
-};
-
-function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
-        height: '100%',
-        width: '100%',
-        playerVars: {
-            'rel': 0,
-            'iv_load_policy': 3,
-            'controls': 0,
-            'disablekb': 1
-        },
-        events: {
-            'onReady': onPlayerReady,
-            'onStateChange': onPlayerStateChange
+const KaraokeApp = {
+    // Configuration & Constants
+    CONFIG: {
+        YOUTUBE_API_KEY: "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI",
+        CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
+        INVIDIOUS_INSTANCES: [
+            'https://invidious.nerdvpn.de/api/v1/search?q=',
+            'https://invidious.lunar.icu/api/v1/search?q='
+        ],
+        SOUND_EFFECTS: {
+            CHEER: "scoreSound.mp3",
+            SUCCESS: "scoreSound.mp3",
+            FAIL: "scoreSound.mp3"
         }
-    });
-}
+    },
 
-function onPlayerStateChange(event) {
-    if (event.data === YT.PlayerState.ENDED) {
-        if (visualizerInitialized) {
-            showFinalScore();
+    // Application State
+    state: {
+        player: null,
+        songQueue: [],
+        audioContext: null,
+        micAnalyser: null,
+        micBuffer: null,
+        micStream: null,
+        isMicActive: false,
+        currentScore: 0,
+        earnedPoints: 0,
+        possiblePoints: 0,
+        scoringInterval: null,
+        isScoreRevealed: false,
+        scoreAudio: null,
+        lastDetectedPitch: 0
+    },
+
+    // Cached DOM Elements
+    elements: {},
+
+    init() {
+        this.cacheElements();
+        this.loadYouTubeAPI();
+        this.attachEventListeners();
+        this.initMobileScaling();
+    },
+
+    cacheElements() {
+        const ids = [
+            'player', 'nowPlaying', 'playerPlaceholder', 'dynamicIsland', 
+            'queueList', 'searchInput', 'videoContainer', 'audioStatus', 
+            'audioText', 'scoreMeter', 'liveScoreBadge', 'scoreBarFill', 
+            'liveScoreValue', 'liveScorePlayer', 'scoreOverlay', 'finalScore', 
+            'finalRank', 'finalMessage'
+        ];
+        ids.forEach(id => this.elements[id] = document.getElementById(id));
+        this.elements.searchContainer = document.querySelector('.search-container');
+        this.elements.searchButtons = document.querySelectorAll('.search-container button');
+    },
+
+    loadYouTubeAPI() {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.body.appendChild(tag);
+        // Global callback for YT API
+        window.onYouTubeIframeAPIReady = () => this.onYouTubeIframeAPIReady();
+    },
+
+    onYouTubeIframeAPIReady() {
+        this.state.player = new YT.Player('player', {
+            height: '100%',
+            width: '100%',
+            playerVars: { 'rel': 0, 'iv_load_policy': 3, 'controls': 0, 'disablekb': 1 },
+            events: {
+                'onReady': () => this.onPlayerReady(),
+                'onStateChange': (e) => this.onPlayerStateChange(e)
+            }
+        });
+    },
+
+    onPlayerReady() {
+        this.startSync();
+        this.state.player.setVolume(100);
+    },
+
+    onPlayerStateChange(event) {
+        if (event.data === YT.PlayerState.ENDED) {
+            this.state.isMicActive ? this.showFinalScore() : this.playNextInQueue();
+        }
+    },
+
+    // --- Search Logic ---
+
+    async handleSearch(playNow = true) {
+        const query = this.elements.searchInput.value.trim();
+        if (!query) return;
+
+        console.log("🔍 Raw Input:", query);
+
+        // Handle Direct Links
+        const directId = this.extractVideoId(query);
+        if (directId) {
+            this.elements.searchInput.value = "";
+            this.handleFoundVideo(directId, playNow, "Direct Link / ID: " + directId);
+            return;
+        }
+
+        const searchBtn = playNow ? this.elements.searchButtons[0] : this.elements.searchButtons[1];
+        const originalText = searchBtn.innerText;
+
+        this.setSearchLoading(true, searchBtn);
+
+        try {
+            let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
+            if (!processedQuery.includes("karaoke")) processedQuery += " karaoke";
+            const cleanCacheQuery = processedQuery.replace(/[^a-z0-9]/g, "");
+            console.log("🛠️ Formatted Cache Query:", cleanCacheQuery);
+
+            // Try Cache
+            let result = await this.fetchFromCache(cleanCacheQuery);
+            
+            // Fallback to API
+            if (!result) {
+                console.log("⚠️ Cache Miss. Moving to API Fallback.");
+                result = await this.fetchFromYouTubeAPI(processedQuery);
+                if (!result) result = await this.fetchFromInvidious(processedQuery);
+                
+                if (result) {
+                    console.log("✨ Found via API:", result.id);
+                    this.saveToCache(cleanCacheQuery, result.id, result.title);
+                }
+            } else {
+                console.log("✅ Cache Hit! Found:", result.id);
+            }
+            if (result) {
+                this.elements.searchInput.value = "";
+                this.handleFoundVideo(result.id, playNow, result.title);
+            } else {
+                alert("Search failed. Please try a different song.");
+            }
+        } catch (err) {
+            console.error("Search error:", err);
+        } finally {
+            this.setSearchLoading(false, searchBtn, originalText);
+        }
+    },
+
+    async fetchFromCache(query) {
+        console.log(`🚀 Starting cache lookup for: ${query}`);
+        try {
+            const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?query=${encodeURIComponent(query)}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            console.log("📦 Cache Response:", data);
+            return (data.found || data.videoId) ? { id: data.videoId, title: data.videoTitle || data.title } : null;
+        } catch (err) {
+            console.error(`❌ Cache fetch error: ${err.message}`);
+            return null;
+        }
+    },
+
+    async fetchFromYouTubeAPI(query) {
+        if (!this.CONFIG.YOUTUBE_API_KEY) return null;
+        try {
+            const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&key=${this.CONFIG.YOUTUBE_API_KEY}`);
+            const data = await res.json();
+            return data.items?.[0] ? { id: data.items[0].id.videoId, title: data.items[0].snippet.title } : null;
+        } catch { return null; }
+    },
+
+    async fetchFromInvidious(query) {
+        for (let baseUrl of this.CONFIG.INVIDIOUS_INSTANCES) {
+            try {
+                const res = await fetch(baseUrl + encodeURIComponent(query));
+                const data = await res.json();
+                const video = data.find(item => item.videoId);
+                if (video) return { id: video.videoId, title: video.title };
+            } catch { continue; }
+        }
+        return null;
+    },
+
+    saveToCache(query, videoId, videoTitle) {
+        fetch(this.CONFIG.CACHE_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, videoId, videoTitle })
+        })
+        .then(res => {
+            if (res.ok) console.log("💾 Successfully Saved to Supabase Cloud Cache!");
+            else console.warn("⚠️ Cache save failed (Server responded with error)");
+        })
+        .catch(e => console.error("Cache save error:", e));
+    },
+
+    // --- Queue & Playback ---
+
+    handleFoundVideo(id, playNow, title, thumbnail = null) {
+        const song = { id, title: title || `Video: ${id}`, thumbnail: thumbnail || `https://img.youtube.com/vi/${id}/mqdefault.jpg` };
+
+        if (playNow) {
+            this.resetScore();
+            this.state.player.loadVideoById(id);
+            this.updateNowPlayingUI(song.title);
         } else {
-            playNextInQueue();
+            this.state.songQueue.push(song);
+            this.updateQueueUI();
+            const playerState = this.state.player.getPlayerState();
+            if (playerState === YT.PlayerState.ENDED || playerState === -1 || playerState === YT.PlayerState.CUED) {
+                this.playNextInQueue();
+            }
         }
-    }
-}
+    },
 
-function setNowPlaying(title) {
-    const el = document.getElementById('nowPlaying');
-    const placeholder = document.getElementById('playerPlaceholder');
-    const island = document.getElementById('dynamicIsland');
-    
-    if (title) {
-        el.innerText = "🎵 " + title;
-        placeholder.classList.add('hidden');
-        island.classList.add('active');
-    } else {
-        el.innerText = "Ready to Sing";
-        placeholder.classList.remove('hidden');
-        island.classList.remove('active');
-    }
-}
-
-function playNextInQueue() {
-    resetScore();
-    if (songQueue.length > 0) {
-        let nextSong = songQueue.shift();
-        player.loadVideoById(nextSong.id);
-        setNowPlaying(nextSong.title);
-        updateQueueUI();
-    } else {
-        let videoData = player.getVideoData();
-        if (videoData && videoData.video_id) {
-            player.cueVideoById(videoData.video_id);
+    playNextInQueue() {
+        this.resetScore();
+        if (this.state.songQueue.length > 0) {
+            const nextSong = this.state.songQueue.shift();
+            this.state.player.loadVideoById(nextSong.id);
+            this.updateNowPlayingUI(nextSong.title);
+            this.updateQueueUI();
         } else {
-            player.stopVideo();
+            this.state.player.stopVideo();
+            this.updateNowPlayingUI("");
         }
-        setNowPlaying("");
-    }
-}
+    },
 
-function removeFromQueue(index) {
-    songQueue.splice(index, 1);
-    updateQueueUI();
-}
+    updateNowPlayingUI(title) {
+        const { nowPlaying, playerPlaceholder, dynamicIsland } = this.elements;
+        if (title) {
+            nowPlaying.innerText = "🎵 " + title;
+            playerPlaceholder.classList.add('hidden');
+            dynamicIsland.classList.add('active');
+        } else {
+            nowPlaying.innerText = "Ready to Sing";
+            playerPlaceholder.classList.remove('hidden');
+            dynamicIsland.classList.remove('active');
+        }
+    },
 
-function updateQueueUI() {
-    const list = document.getElementById('queueList');
-    if (songQueue.length === 0) {
-        list.innerHTML = '<li style="justify-content: center; color: var(--text-secondary); font-style: italic; border: none; background: transparent;">Queue is empty</li>';
-        return;
-    }
-    list.innerHTML = '';
-    songQueue.forEach((song, index) => {
-        let li = document.createElement('li');
-        
-        if (index === 0) {
-            let tag = document.createElement('div');
-            tag.className = 'next-tag';
-            tag.innerText = 'Next Up';
-            li.appendChild(tag);
+    updateQueueUI() {
+        const list = this.elements.queueList;
+        if (this.state.songQueue.length === 0) {
+            list.innerHTML = '<li class="empty-queue-state">Queue is empty</li>';
+            return;
+        }
+        list.innerHTML = '';
+        this.state.songQueue.forEach((song, index) => {
+            const li = document.createElement('li');
+            if (index === 0) li.innerHTML = '<div class="next-tag">Next Up</div>';
+            
+            li.innerHTML += `
+                <img class="song-thumb" src="${song.thumbnail}" alt="">
+                <div class="song-info">
+                    <span class="song-title">${song.title}</span>
+                    <div class="song-meta">Pos: ${index + 1} • Ready to sing</div>
+                </div>
+                <button class="queue-remove-btn" onclick="KaraokeApp.removeFromQueue(${index})">✕</button>
+            `;
+            list.appendChild(li);
+        });
+    },
+
+    removeFromQueue(index) {
+        this.state.songQueue.splice(index, 1);
+        this.updateQueueUI();
+    },
+
+    // --- Audio & Scoring ---
+
+    async toggleMic() {
+        const { audioStatus, audioText, scoreMeter, liveScoreBadge } = this.elements;
+
+        if (this.state.isMicActive) {
+            this.stopScoring();
+            if (this.state.micStream) this.state.micStream.getTracks().forEach(t => t.stop());
+            this.state.isMicActive = false;
+            audioStatus.classList.remove('active');
+            audioText.innerText = "Mic: Off";
+            [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "none");
+            return;
         }
 
-        let img = document.createElement('img');
-        img.className = 'song-thumb';
-        img.src = song.thumbnail || `https://img.youtube.com/vi/${song.id}/mqdefault.jpg`;
-        img.alt = '';
+        try {
+            this.state.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (!this.state.audioContext) this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            this.state.micAnalyser = this.state.audioContext.createAnalyser();
+            this.state.micAnalyser.fftSize = 2048;
+            this.state.audioContext.createMediaStreamSource(this.state.micStream).connect(this.state.micAnalyser);
+            this.state.micBuffer = new Float32Array(this.state.micAnalyser.fftSize);
+            
+            this.state.isMicActive = true;
+            audioStatus.classList.add('active');
+            audioText.innerText = "Mic: On";
+            [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "flex");
+            this.startScoring();
+        } catch (err) {
+            alert("Microphone access is required for scoring.");
+        }
+    },
 
-        let info = document.createElement('div');
-        info.className = 'song-info';
+    updateScore() {
+        if (!this.state.isMicActive || !this.state.micAnalyser) return;
+        if (this.state.player.getPlayerState() !== YT.PlayerState.PLAYING) return;
 
-        let title = document.createElement('span');
-        title.className = 'song-title';
-        title.innerText = song.title;
+        this.state.micAnalyser.getFloatTimeDomainData(this.state.micBuffer);
+        let sum = 0;
+        for (let i = 0; i < this.state.micBuffer.length; i++) sum += this.state.micBuffer[i] ** 2;
+        const energy = Math.sqrt(sum / this.state.micBuffer.length) * 100;
+        const pitch = this.autoCorrelate(this.state.micBuffer, this.state.audioContext.sampleRate);
 
-        let meta = document.createElement('div');
-        meta.className = 'song-meta';
-        meta.innerText = `Pos: ${index + 1} • Ready to sing`;
+        this.state.possiblePoints += 1;
+        if (energy > 3.0) {
+            let mult = pitch > 0 ? (Math.abs(pitch - this.state.lastDetectedPitch) > 5 ? 1.3 : 0.3) : 0.4;
+            this.state.earnedPoints += Math.min((energy / 15) * mult, 1.2);
+            this.state.lastDetectedPitch = pitch;
+        }
 
-        info.appendChild(title);
-        info.appendChild(meta);
+        this.state.currentScore = (this.state.earnedPoints / this.state.possiblePoints) * 100;
+        const display = Math.min(Math.floor(this.state.currentScore), 100);
+        this.elements.scoreBarFill.style.width = display + "%";
+        this.elements.liveScoreValue.innerText = display;
+        this.elements.liveScorePlayer.innerText = display;
+    },
 
-        let removeBtn = document.createElement('button');
-        removeBtn.className = 'queue-remove-btn';
-        removeBtn.innerHTML = '✕';
-        removeBtn.onclick = (e) => {
-            e.stopPropagation();
-            removeFromQueue(index);
+    showFinalScore() {
+        if (this.state.isScoreRevealed) return;
+        this.state.isScoreRevealed = true;
+        this.stopScoring();
+
+        const score = Math.min(Math.floor(this.state.currentScore), 100);
+        const { scoreOverlay, finalScore, finalRank, finalMessage } = this.elements;
+
+        finalScore.innerText = score;
+        let rankData = this.getRankData(score);
+        finalRank.innerText = rankData.label;
+        finalRank.style.color = rankData.color;
+        finalMessage.innerText = rankData.msg;
+
+        scoreOverlay.classList.add('active');
+        this.playScoreSound(rankData.rank);
+        this.startFinalScoreTimer();
+    },
+
+    getRankData(score) {
+        if (score >= 95) return { rank: 'legendary', label: "Legendary", color: "#ffcc00", msg: "Masterpiece!" };
+        if (score >= 85) return { rank: 'rockstar', label: "Rockstar", color: "#007aff", msg: "Incredible!" };
+        if (score >= 70) return { rank: 'pro', label: "Pro", color: "#4cd964", msg: "Great job!" };
+        if (score >= 40) return { rank: 'amateur', label: "Amateur", color: "#ff9500", msg: "Not bad!" };
+        return { rank: 'beginner', label: "Beginner", color: "#ff3b30", msg: "Keep practicing!" };
+    },
+
+    startFinalScoreTimer() {
+        let seconds = 15;
+        const updateMsg = () => {
+            this.elements.finalMessage.innerText = this.state.songQueue.length > 0 ? `Next song in ${seconds}s...` : `Closing in ${seconds}s...`;
         };
 
-        li.appendChild(img);
-        li.appendChild(info);
-        li.appendChild(removeBtn);
-        list.appendChild(li);
-    });
-}
-
-function handleFoundVideo(id, playNow, title, thumbnail = null) {
-    let songName = title || "Video: " + id;
-    let thumbUrl = thumbnail || `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
-
-    if (playNow) {
-        resetScore();
-        player.loadVideoById(id);
-        setNowPlaying(songName);
-    } else {
-        songQueue.push({ id: id, title: songName, thumbnail: thumbUrl });
-        updateQueueUI();
-
-        let state = player.getPlayerState ? player.getPlayerState() : -1;
-        if (state === YT.PlayerState.ENDED || state === YT.PlayerState.UNSTARTED || state === YT.PlayerState.CUED || state === -1) {
-            playNextInQueue();
-        }
-    }
-}
-
-function onPlayerReady() {
-    startSync();
-    player.setVolume(100);
-}
-
-function playVideo() {
-    player.playVideo();
-}
-
-function pauseVideo() {
-    player.pauseVideo();
-}
-
-function restartVideo() {
-    if (scoreAudio) {
-        scoreAudio.pause();
-        scoreAudio = null;
-    }
-    document.getElementById('scoreOverlay').classList.remove('active');
-    
-    let videoData = player.getVideoData();
-    if (videoData && videoData.title) {
-        setNowPlaying(videoData.title);
-    }
-    
-    resetScore();
-    player.seekTo(0);
-    player.playVideo();
-    if (visualizerInitialized) startScoring();
-}
-
-function changeVolume(val) {
-    if (player && player.setVolume) {
-        player.setVolume(val);
-    }
-}
-
-function toggleFullscreen() {
-    const container = document.getElementById('videoContainer');
-    if (!document.fullscreenElement) {
-        container.requestFullscreen().catch(err => {
-            console.error("Error attempting to enable fullscreen:", err);
-        });
-    } else {
-        document.exitFullscreen();
-    }
-}
-
-async function loadVideo(playNow = true) {
-    let rawQuery = document.getElementById('searchInput').value.trim();
-    if (!rawQuery) return;
-
-    // 1. Direct YouTube URL or ID parsing
-    let videoId = null;
-    try {
-        let url = new URL(rawQuery);
-        if (url.hostname.includes('youtube.com')) {
-            videoId = url.searchParams.get('v');
-        } else if (url.hostname === 'youtu.be') {
-            videoId = url.pathname.slice(1);
-        }
-    } catch (e) { }
-
-    if (!videoId && rawQuery.length === 11 && !rawQuery.includes(' ')) {
-        videoId = rawQuery;
-    }
-
-    if (videoId) {
-        document.getElementById('searchInput').value = "";
-        handleFoundVideo(videoId, playNow, "Direct Link / ID: " + videoId);
-        return;
-    }
-
-    // 2. Setup UI state for searching
-    let searchBtn = document.querySelector('.search-container button');
-    let originalText = searchBtn.innerText;
-    searchBtn.innerText = "Searching...";
-    searchBtn.disabled = true;
-
-    // --- DEBUG: Show raw input ---
-    console.log("🔍 Raw Input:", rawQuery);
-
-    // ✨ LOGIC PATCH: Lowercase, remove quotes, and clear multiple spaces
-    let processedQuery = rawQuery.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
-
-    // Append the karaoke suffix if missing to mirror mobile behavior perfectly
-    if (!processedQuery.includes("karaoke")) {
-        processedQuery += " karaoke";
-    }
-
-    // Structural normalization pass
-    const cleanCacheQuery = processedQuery.trim().replace(/\s+/g, " ");
-
-    // --- DEBUG: Show formatted query ---
-    console.log("🛠️ Formatted Cache Query:", cleanCacheQuery);
-
-    // --- CACHE-FIRST STRATEGY ---
-    const CACHE_ENDPOINT = "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache"; 
-    let foundId = null;
-    let foundTitle = null;
-
-    try {
-        console.log("📡 Checking Cache...");
-        // Query param points directly to our unified clean format string
-        const cacheRes = await fetch(`${CACHE_ENDPOINT}?query=${encodeURIComponent(cleanCacheQuery)}`);
-        
-        if (cacheRes.ok) {
-            const cacheData = await cacheRes.json();
-            // --- DEBUG: Show backend response ---
-            console.log("📦 Cache Response:", cacheData);
-            if (cacheData.found || cacheData.videoId) {
-                foundId = cacheData.videoId;
-                foundTitle = cacheData.videoTitle || cacheData.title; 
-                console.log("✅ Cache Hit! Found:", foundId);
-            } else {
-                console.log("⚠️ Cache Miss. Moving to API Fallback.");
-            }
-        }
-    } catch (e) { 
-        console.error("❌ Cache Error:", e);
-    }
-
-    // --- API FALLBACK (If Cache Miss) ---
-    if (!foundId) {
-        console.log("🌐 Starting API Fallback search for:", cleanCacheQuery);
-        const YOUTUBE_API_KEY = "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI";
-
-        // Try YouTube API
-        if (YOUTUBE_API_KEY.length > 20 && !YOUTUBE_API_KEY.includes('YOUR_API_KEY')) {
-            try {
-                let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(cleanCacheQuery)}&type=video&videoEmbeddable=true&key=${YOUTUBE_API_KEY}`);
-                if (res.ok) {
-                    let data = await res.json();
-                    if (data.items?.length > 0) {
-                        foundId = data.items[0].id.videoId;
-                        foundTitle = data.items[0].snippet.title;
-                    }
-                }
-            } catch (e) { console.error("YouTube API Error:", e); }
-        }
-
-        // Try Invidious Fallback
-        if (!foundId) {
-            const instances = ['https://invidious.nerdvpn.de/api/v1/search?q=', 'https://invidious.lunar.icu/api/v1/search?q='];
-            for (let baseUrl of instances) {
-                try {
-                    let res = await fetch(baseUrl + encodeURIComponent(cleanCacheQuery));
-                    let data = await res.json();
-                    let video = data.find(item => item.videoId);
-                    if (video) {
-                        foundId = video.videoId;
-                        foundTitle = video.title;
-                        break;
-                    }
-                } catch (e) { continue; }
-            }
-        }
-
-        // --- SAVE TO CACHE (Only if result found via API) ---
-        if (foundId && foundTitle) {
-            console.log("✨ Found via API:", foundId)
-            fetch(CACHE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    query: cleanCacheQuery, // 💾 Saves structural string '14 karaoke' 
-                    videoId: foundId, 
-                    videoTitle: foundTitle 
-                })
-            })
-            .then(res => {
-                if (res.ok) console.log("💾 Successfully Saved to Supabase Cloud Cache!");
-            })
-            .catch(e => console.error("Cache Save Error:", e));
-        }
-    }
-
-    // 3. Finalize UI state and handle results
-    searchBtn.innerText = originalText;
-    searchBtn.disabled = false;
-
-    if (foundId) {
-        document.getElementById('searchInput').value = "";
-        handleFoundVideo(foundId, playNow, foundTitle || cleanCacheQuery);
-    } else {
-        alert("Search failed. Please try a different song or paste a YouTube URL.");
-    }
-}
-
-// =========================================================================
-// 🎙️ MIC-ONLY ADVANCED PITCH-TRACKING SCORING ENGINE
-// =========================================================================
-let audioContext;
-let micAnalyser;
-let micBuffer; 
-let micStream;
-let visualizerInitialized = false;
-
-let currentScore = 0;
-let earnedPoints = 0;
-let possiblePoints = 0;
-let scoringInterval;
-let isScoreRevealed = false;
-let scoreAudio = null;
-
-let lastDetectedPitch = 0; 
-
-async function toggleVisualizer() {
-    const statusEl = document.getElementById('audioStatus');
-    const textEl = document.getElementById('audioText');
-    const scoreMeter = document.getElementById('scoreMeter');
-    const liveBadge = document.getElementById('liveScoreBadge');
-
-    if (visualizerInitialized) {
-        stopScoring();
-        if (micStream) micStream.getTracks().forEach(track => track.stop());
-        visualizerInitialized = false;
-        statusEl.classList.remove('active');
-        textEl.innerText = "Mic: Off";
-        scoreMeter.style.display = "none";
-        liveBadge.style.display = "none";
-        return;
-    }
-
-    try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
-        micAnalyser = audioContext.createAnalyser();
-        micAnalyser.fftSize = 2048; 
-        
-        const micSource = audioContext.createMediaStreamSource(micStream);
-        micSource.connect(micAnalyser);
-        
-        micBuffer = new Float32Array(micAnalyser.fftSize);
-        
-        visualizerInitialized = true;
-        statusEl.classList.add('active');
-        textEl.innerText = "Mic: On";
-        scoreMeter.style.display = "flex";
-        liveBadge.style.display = "flex";
-        
-        startScoring();
-        
-    } catch (err) {
-        console.error("Audio access denied:", err);
-        alert("Scoring requires Microphone access. Please grant mic permission to sing!");
-        
-        if (micStream) micStream.getTracks().forEach(track => track.stop());
-        visualizerInitialized = false;
-    }
-}
-
-function startScoring() {
-    if (scoringInterval) clearInterval(scoringInterval);
-    scoringInterval = setInterval(updateScore, 200); 
-}
-
-function stopScoring() {
-    if (scoringInterval) clearInterval(scoringInterval);
-    scoringInterval = null;
-}
-
-function autoCorrelate(buffer, sampleRate) {
-    let size = buffer.length;
-    let rms = 0;
-
-    for (let i = 0; i < size; i++) {
-        let val = buffer[i];
-        rms += val * val;
-    }
-    rms = Math.sqrt(rms / size);
-    
-    if (rms < 0.015) return -1; 
-
-    let r1 = 0, r2 = size - 1;
-    let thres = 0.2;
-    for (let i = 0; i < size / 2; i++) {
-        if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
-    }
-    for (let i = size - 1; i >= size / 2; i--) {
-        if (Math.abs(buffer[i]) < thres) { r2 = i; break; }
-    }
-    let clippedBuffer = buffer.slice(r1, r2);
-    let clippedSize = clippedBuffer.length;
-
-    let c = new Float32Array(clippedSize);
-    for (let i = 0; i < clippedSize; i++) {
-        for (let j = 0; j < clippedSize - i; j++) {
-            c[i] += clippedBuffer[j] * clippedBuffer[j + i];
-        }
-    }
-
-    let d = 0;
-    while (c[d] > 0) d++;
-    
-    let maxVal = -1;
-    let maxPeriod = -1;
-    for (let i = d; i < clippedSize; i++) {
-        if (c[i] > maxVal) {
-            maxVal = c[i];
-            maxPeriod = i;
-        }
-    }
-
-    let fundamentalFrequency = sampleRate / maxPeriod;
-    if (fundamentalFrequency > 50 && fundamentalFrequency < 2000) {
-        return fundamentalFrequency;
-    }
-    return -1;
-}
-
-function updateScore() {
-    if (!visualizerInitialized || !micAnalyser) return;
-    
-    const isPlaying = player && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING;
-    if (!isPlaying) return;
-
-    micAnalyser.getFloatTimeDomainData(micBuffer);
-
-    let sumSquares = 0;
-    for (let i = 0; i < micBuffer.length; i++) {
-        sumSquares += micBuffer[i] * micBuffer[i];
-    }
-    let vocalVolumeEnergy = Math.sqrt(sumSquares / micBuffer.length) * 100;
-
-    let currentPitch = autoCorrelate(micBuffer, audioContext.sampleRate);
-    possiblePoints += 1.0;
-
-    if (vocalVolumeEnergy > 3.0) {
-        let frameMultiplier = 1.0;
-
-        if (currentPitch > 0) {
-            if (lastDetectedPitch > 0) {
-                let pitchDelta = Math.abs(currentPitch - lastDetectedPitch);
-                if (pitchDelta === 0) {
-                    frameMultiplier = 0.3; 
-                } else if (pitchDelta > 5 && pitchDelta < 40) {
-                    frameMultiplier = 1.3; 
-                } else if (pitchDelta > 120) {
-                    frameMultiplier = 0.2; 
-                }
-            }
-            lastDetectedPitch = currentPitch;
-        } else {
-            frameMultiplier = 0.4;
-        }
-
-        let earnedTick = Math.min((vocalVolumeEnergy / 15) * frameMultiplier, 1.2);
-        earnedPoints += earnedTick;
-    } else {
-        lastDetectedPitch = 0;
-    }
-
-    if (possiblePoints > 0) {
-        currentScore = (earnedPoints / possiblePoints) * 100;
-    }
-
-    const displayScore = Math.min(Math.floor(currentScore), 100);
-    document.getElementById('scoreBarFill').style.width = displayScore + "%";
-    document.getElementById('liveScoreValue').innerText = displayScore;
-    document.getElementById('liveScorePlayer').innerText = displayScore;
-}
-
-function showFinalScore() {
-    if (!visualizerInitialized || isScoreRevealed) return;
-    isScoreRevealed = true;
-
-    const score = Math.min(Math.floor(currentScore), 100);
-    const overlay = document.getElementById('scoreOverlay');
-    const scoreEl = document.getElementById('finalScore');
-    const rankEl = document.getElementById('finalRank');
-    const msgEl = document.getElementById('finalMessage');
-
-    scoreEl.innerText = score;
-    
-    let rank = "";
-    if (score >= 95) {
-        rank = "legendary";
-        rankEl.innerText = "Legendary";
-        rankEl.style.color = "#ffcc00";
-        msgEl.innerText = "Absolute masterpiece! You're a star!";
-    } else if (score >= 85) {
-        rank = "rockstar";
-        rankEl.innerText = "Rockstar";
-        rankEl.style.color = "#007aff";
-        msgEl.innerText = "Incredible performance! The crowd loves you!";
-    } else if (score >= 70) {
-        rank = "pro";
-        rankEl.innerText = "Pro";
-        rankEl.style.color = "#4cd964";
-        msgEl.innerText = "Great job! Your timing was excellent.";
-    } else if (score >= 40) {
-        rank = "amateur";
-        rankEl.innerText = "Amateur";
-        rankEl.style.color = "#ff9500";
-        msgEl.innerText = "Not bad! Keep practicing to hit those high notes.";
-    } else {
-        rank = "beginner";
-        rankEl.innerText = "Beginner";
-        rankEl.style.color = "#ff3b30";
-        msgEl.innerText = "Nice try! Sing louder and stay with the beat.";
-    }
-
-    overlay.classList.add('active');
-    stopScoring();
-    playScoreSound(rank);
-
-    if (scoreAudio) {
-        if (songQueue.length > 0) {
-            msgEl.innerText = "Waiting for sound...";
-        } else {
-            msgEl.innerText = "Done! Select a new song or wait...";
-        }
-        
-        scoreAudio.addEventListener('timeupdate', () => {
-            if (overlay.classList.contains('active') && !isNaN(scoreAudio.duration)) {
-                const remaining = Math.ceil(scoreAudio.duration - scoreAudio.currentTime);
-                if (songQueue.length > 0) {
-                    msgEl.innerText = `Next song in ${remaining}s...`;
-                } else {
-                    msgEl.innerText = `Closing in ${remaining}s...`;
-                }
-            }
-        });
-
-        scoreAudio.addEventListener('ended', () => {
-            if (overlay.classList.contains('active')) {
-                closeScore();
-            }
-        });
-
-        scoreAudio.addEventListener('error', startFallbackTimer);
-    } else {
-        startFallbackTimer();
-    }
-
-    function startFallbackTimer() {
-        let secondsLeft = 15;
-        if (songQueue.length > 0) {
-            msgEl.innerText = `Next song in ${secondsLeft}s...`;
-        } else {
-            msgEl.innerText = `Closing in ${secondsLeft}s...`;
-        }
+        updateMsg();
         const timer = setInterval(() => {
-            secondsLeft--;
-            if (secondsLeft <= 0 || !overlay.classList.contains('active')) {
+            seconds--;
+            if (seconds <= 0 || !this.elements.scoreOverlay.classList.contains('active')) {
                 clearInterval(timer);
-                if (overlay.classList.contains('active')) closeScore();
-            } else {
-                if (songQueue.length > 0) {
-                    msgEl.innerText = `Next song in ${secondsLeft}s...`;
-                } else {
-                    msgEl.innerText = `Closing in ${secondsLeft}s...`;
-                }
-            }
+                this.closeScore();
+            } else updateMsg();
         }, 1000);
-    }
-}
+    },
 
-function playScoreSound(rank) {
-    if (scoreAudio) {
-        scoreAudio.pause();
-        scoreAudio = null;
-    }
+    // --- Utilities ---
 
-    let soundUrl = "";
-    switch(rank) {
-        case 'legendary':
-        case 'rockstar':
-            soundUrl = SOUND_EFFECTS.CHEER;
-            break;
-        case 'pro':
-        case 'amateur':
-            soundUrl = SOUND_EFFECTS.SUCCESS;
-            break;
-        default:
-            soundUrl = SOUND_EFFECTS.FAIL;
-    }
-    
-    scoreAudio = new Audio(soundUrl);
-    scoreAudio.volume = 0.5;
-    scoreAudio.play().catch(e => console.log("Sound blocked by browser policy until user interacts."));
-}
+    extractVideoId(query) {
+        try {
+            const url = new URL(query);
+            if (url.hostname.includes('youtube.com')) return url.searchParams.get('v');
+            if (url.hostname === 'youtu.be') return url.pathname.slice(1);
+        } catch {}
+        return (query.length === 11 && !query.includes(' ')) ? query : null;
+    },
 
-function closeScore() {
-    if (scoreAudio) {
-        scoreAudio.pause();
-        scoreAudio = null;
-    }
-    document.getElementById('scoreOverlay').classList.remove('active');
-    playNextInQueue();
-    if (visualizerInitialized) startScoring();
-}
+    setSearchLoading(isLoading, btn, text) {
+        btn.innerText = isLoading ? "Searching..." : text;
+        btn.disabled = isLoading;
+        this.elements.searchContainer.classList.toggle('loading', isLoading);
+    },
 
-function resetScore() {
-    currentScore = 0;
-    earnedPoints = 0;
-    possiblePoints = 0;
-    isScoreRevealed = false;
-    lastDetectedPitch = 0;
-    document.getElementById('scoreBarFill').style.width = "0%";
-    document.getElementById('liveScoreValue').innerText = "0";
-    document.getElementById('liveScorePlayer').innerText = "0";
-}
+    startScoring() {
+        if (this.state.scoringInterval) clearInterval(this.state.scoringInterval);
+        this.state.scoringInterval = setInterval(() => this.updateScore(), 200);
+    },
 
-function startSync() {
-    setInterval(() => {
-        if (!player || !player.getCurrentTime) return;
+    stopScoring() {
+        clearInterval(this.state.scoringInterval);
+        this.state.scoringInterval = null;
+    },
 
-        const currentTime = player.getCurrentTime();
-        const duration = player.getDuration();
+    resetScore() {
+        Object.assign(this.state, { currentScore: 0, earnedPoints: 0, possiblePoints: 0, isScoreRevealed: false, lastDetectedPitch: 0 });
+        this.elements.scoreBarFill.style.width = "0%";
+        this.elements.liveScoreValue.innerText = "0";
+        this.elements.liveScorePlayer.innerText = "0";
+    },
 
-        if (duration) {
-            if (duration - currentTime <= 0.5 && player.getPlayerState() === YT.PlayerState.PLAYING) {
-                if (visualizerInitialized) {
-                    showFinalScore();
-                } else {
-                    playNextInQueue();
-                }
+    autoCorrelate(buffer, sampleRate) {
+        let size = buffer.length;
+        let rms = 0;
+        for (let i = 0; i < size; i++) rms += buffer[i] * buffer[i];
+        if (Math.sqrt(rms / size) < 0.015) return -1;
+
+        let r1 = 0, r2 = size - 1, thres = 0.2;
+        for (let i = 0; i < size / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+        for (let i = size - 1; i >= size / 2; i--) if (Math.abs(buffer[i]) < thres) { r2 = i; break; }
+        
+        let clipped = buffer.slice(r1, r2);
+        let c = new Float32Array(clipped.length);
+        for (let i = 0; i < clipped.length; i++) {
+            for (let j = 0; j < clipped.length - i; j++) c[i] += clipped[j] * clipped[j + i];
+        }
+        let d = 0; while (c[d] > 0) d++;
+        let maxVal = -1, maxPeriod = -1;
+        for (let i = d; i < clipped.length; i++) {
+            if (c[i] > maxVal) { maxVal = c[i]; maxPeriod = i; }
+        }
+        let freq = sampleRate / maxPeriod;
+        return (freq > 50 && freq < 2000) ? freq : -1;
+    },
+
+    playScoreSound(rank) {
+        if (this.state.scoreAudio) this.state.scoreAudio.pause();
+        const sound = ['legendary', 'rockstar'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.CHEER : 
+                      ['pro', 'amateur'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.SUCCESS : this.CONFIG.SOUND_EFFECTS.FAIL;
+        this.state.scoreAudio = new Audio(sound);
+        this.state.scoreAudio.volume = 0.5;
+        this.state.scoreAudio.play().catch(() => {});
+    },
+
+    closeScore() {
+        if (this.state.scoreAudio) this.state.scoreAudio.pause();
+        this.elements.scoreOverlay.classList.remove('active');
+        this.playNextInQueue();
+        if (this.state.isMicActive) this.startScoring();
+    },
+
+    startSync() {
+        setInterval(() => {
+            if (!this.state.player?.getCurrentTime) return;
+            const remain = this.state.player.getDuration() - this.state.player.getCurrentTime();
+            if (remain <= 0.5 && this.state.player.getPlayerState() === YT.PlayerState.PLAYING) {
+                this.state.isMicActive ? this.showFinalScore() : this.playNextInQueue();
             }
+        }, 100);
+    },
+
+    // --- Event Listeners ---
+
+    attachEventListeners() {
+        document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
+        // The volume change and fullscreen toggle can be called via buttons in HTML
+    },
+
+    handleGlobalKeyDown(event) {
+        if (document.activeElement === this.elements.searchInput) {
+            if (event.key === 'Enter') this.handleSearch(!event.shiftKey);
+            return;
         }
-    }, 100);
-}
+        const map = {
+            'z': () => this.state.player.playVideo(),
+            'x': () => this.state.player.pauseVideo(),
+            'c': () => this.restartVideo(),
+            'b': () => this.playNextInQueue(),
+            'f': () => this.toggleFullscreen()
+        };
+        const action = map[event.key.toLowerCase()];
+        if (action) action();
+    },
 
-function cancelCurrentSong() {
-    resetScore();
-    if (songQueue.length > 0) {
-        playNextInQueue();
-    } else {
-        if (player && player.stopVideo) {
-            player.stopVideo();
-        }
-        setNowPlaying("");
+    restartVideo() {
+        this.elements.scoreOverlay.classList.remove('active');
+        this.resetScore();
+        this.state.player.seekTo(0);
+        this.state.player.playVideo();
+        if (this.state.isMicActive) this.startScoring();
+    },
+
+    toggleFullscreen() {
+        const container = this.elements.videoContainer;
+        if (!document.fullscreenElement) container.requestFullscreen().catch(() => {});
+        else document.exitFullscreen();
+    },
+
+    initMobileScaling() {
+        const apply = () => {
+            const w = window.innerWidth || screen.width;
+            const ratio = Math.max(0.6, Math.min(1, w / 375));
+            const root = document.documentElement;
+            root.style.setProperty('--mobile-button-size', Math.round(44 * ratio) + 'px');
+            root.style.setProperty('--mobile-icon-size', Math.round(20 * ratio) + 'px');
+            root.style.setProperty('--mobile-score-number-size', Math.round(120 * ratio) + 'px');
+        };
+        window.addEventListener('resize', apply);
+        apply();
     }
-}
+};
 
-document.addEventListener('keydown', function (event) {
-    const searchInput = document.getElementById('searchInput');
-    const isInputFocused = document.activeElement === searchInput;
-
-    if (isInputFocused) {
-        if (event.key === 'Enter') {
-            if (event.shiftKey) {
-                loadVideo(false);
-            } else {
-                loadVideo(true);
-            }
-        }
-        return;
-    }
-
-    switch (event.key.toLowerCase()) {
-        case 'z': playVideo(); break;
-        case 'x': pauseVideo(); break;
-        case 'c': restartVideo(); break;
-        case 'b': cancelCurrentSong(); break;
-        case 'f': toggleFullscreen(); break;
-    }
-});
-
-(function(){
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-    function applyMobileVariables(width) {
-        const base = 375; 
-        const ratio = clamp(width / base, 0.6, 1);
-
-        const buttonSize = Math.round(clamp(44 * ratio, 34, 52));
-        const iconSize = Math.round(clamp(buttonSize * 0.45, 12, 22));
-        const thumbW = Math.round(clamp(60 * ratio, 40, 72));
-        const thumbH = Math.round(clamp(45 * ratio, 30, 54));
-        const scoreNumber = Math.round(clamp(120 * ratio, 40, 120));
-
-        const root = document.documentElement;
-        root.style.setProperty('--mobile-button-size', buttonSize + 'px');
-        root.style.setProperty('--mobile-icon-size', iconSize + 'px');
-        root.style.setProperty('--mobile-song-thumb-width', thumbW + 'px');
-        root.style.setProperty('--mobile-song-thumb-height', thumbH + 'px');
-        root.style.setProperty('--mobile-score-number-size', scoreNumber + 'px');
-
-        root.style.setProperty('--detected-viewport-width', Math.round(width) + 'px');
-        root.style.setProperty('--detected-device-dpr', (window.devicePixelRatio || 1).toString());
-    }
-
-    function detectAndApply() {
-        const chosen = window.innerWidth || document.documentElement.clientWidth || screen.width || 375;
-        applyMobileVariables(chosen);
-    }
-
-    let resizeTimer = null;
-    function schedule() {
-        if (resizeTimer) clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => { detectAndApply(); resizeTimer = null; }, 120);
-    }
-
-    window.addEventListener('resize', schedule);
-    window.addEventListener('orientationchange', schedule);
-    document.addEventListener('DOMContentLoaded', detectAndApply);
-    detectAndApply();
-})();
+// Initialize application
+document.addEventListener('DOMContentLoaded', () => KaraokeApp.init());
