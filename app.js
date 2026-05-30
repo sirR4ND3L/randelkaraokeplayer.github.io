@@ -197,12 +197,13 @@ function toggleFullscreen() {
 }
 
 async function loadVideo(playNow = true) {
-    let query = document.getElementById('searchInput').value.trim();
-    if (!query) return;
+    let rawQuery = document.getElementById('searchInput').value.trim();
+    if (!rawQuery) return;
 
+    // 1. Direct YouTube URL or ID parsing
     let videoId = null;
     try {
-        let url = new URL(query);
+        let url = new URL(rawQuery);
         if (url.hostname.includes('youtube.com')) {
             videoId = url.searchParams.get('v');
         } else if (url.hostname === 'youtu.be') {
@@ -210,8 +211,8 @@ async function loadVideo(playNow = true) {
         }
     } catch (e) { }
 
-    if (!videoId && query.length === 11 && !query.includes(' ')) {
-        videoId = query;
+    if (!videoId && rawQuery.length === 11 && !rawQuery.includes(' ')) {
+        videoId = rawQuery;
     }
 
     if (videoId) {
@@ -220,104 +221,117 @@ async function loadVideo(playNow = true) {
         return;
     }
 
+    // 2. Setup UI state for searching
     let searchBtn = document.querySelector('.search-container button');
     let originalText = searchBtn.innerText;
     searchBtn.innerText = "Searching...";
     searchBtn.disabled = true;
+
+    // --- DEBUG: Show raw input ---
+    console.log("🔍 Raw Input:", rawQuery);
+
+    // ✨ LOGIC PATCH: Lowercase, remove quotes, and clear multiple spaces
+    let processedQuery = rawQuery.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
+
+    // Append the karaoke suffix if missing to mirror mobile behavior perfectly
+    if (!processedQuery.includes("karaoke")) {
+        processedQuery += " karaoke";
+    }
+
+    // Structural normalization pass
+    const cleanCacheQuery = processedQuery.trim().replace(/\s+/g, " ");
+
+    // --- DEBUG: Show formatted query ---
+    console.log("🛠️ Formatted Cache Query:", cleanCacheQuery);
+
+    // --- CACHE-FIRST STRATEGY ---
+    const CACHE_ENDPOINT = "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache"; 
     let foundId = null;
     let foundTitle = null;
 
-    let searchQuery = query;
-    if (!searchQuery.toLowerCase().includes('karaoke')) {
-        searchQuery += ' karaoke';
-    }
-
-    const YOUTUBE_API_KEY = "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI";
-
-    if (YOUTUBE_API_KEY && YOUTUBE_API_KEY.length > 20 && !YOUTUBE_API_KEY.includes('YOUR_API_KEY')) {
-        try {
-            let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(searchQuery)}&type=video&videoEmbeddable=true&key=${YOUTUBE_API_KEY}`);
-            if (res.ok) {
-                let data = await res.json();
-                if (data.items && data.items.length > 0) {
-                    foundId = data.items[0].id.videoId;
-                    foundTitle = data.items[0].snippet.title;
-                }
+    try {
+        console.log("📡 Checking Cache...");
+        // Query param points directly to our unified clean format string
+        const cacheRes = await fetch(`${CACHE_ENDPOINT}?query=${encodeURIComponent(cleanCacheQuery)}`);
+        
+        if (cacheRes.ok) {
+            const cacheData = await cacheRes.json();
+            // --- DEBUG: Show backend response ---
+            console.log("📦 Cache Response:", cacheData);
+            if (cacheData.found || cacheData.videoId) {
+                foundId = cacheData.videoId;
+                foundTitle = cacheData.videoTitle || cacheData.title; 
+                console.log("✅ Cache Hit! Found:", foundId);
             } else {
-                console.error("YouTube API Error:", await res.text());
+                console.log("⚠️ Cache Miss. Moving to API Fallback.");
             }
-        } catch (e) {
-            console.error("YouTube API Fetch Error", e);
         }
+    } catch (e) { 
+        console.error("❌ Cache Error:", e);
     }
 
+    // --- API FALLBACK (If Cache Miss) ---
     if (!foundId) {
-        const instances = [
-            'https://invidious.nerdvpn.de/api/v1/search?q=',
-            'https://invidious.lunar.icu/api/v1/search?q=',
-            'https://inv.tux.pizza/api/v1/search?q='
-        ];
+        console.log("🌐 Starting API Fallback search for:", cleanCacheQuery);
+        const YOUTUBE_API_KEY = "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI";
 
-        const fetchSearch = async (url) => {
+        // Try YouTube API
+        if (YOUTUBE_API_KEY.length > 20 && !YOUTUBE_API_KEY.includes('YOUR_API_KEY')) {
             try {
-                let res = await fetch(url);
+                let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(cleanCacheQuery)}&type=video&videoEmbeddable=true&key=${YOUTUBE_API_KEY}`);
                 if (res.ok) {
                     let data = await res.json();
-                    let items = data.items || data;
-                    if (items && items.length > 0) {
-                        let video = items.find(item => item.type === "video" || item.videoId || (item.url && item.url.includes('/watch?v=')));
-                        if (video) {
-                            foundTitle = video.title || "";
-                            return video.videoId || (video.url ? video.url.split('v=')[1] : null);
-                        }
-                        if (items[0].videoId) {
-                            foundTitle = items[0].title || "";
-                            return items[0].videoId;
-                        }
+                    if (data.items?.length > 0) {
+                        foundId = data.items[0].id.videoId;
+                        foundTitle = data.items[0].snippet.title;
                     }
                 }
-            } catch (e) { }
-            return null;
-        };
+            } catch (e) { console.error("YouTube API Error:", e); }
+        }
 
-        for (let baseUrl of instances) {
-            let targetUrl = baseUrl + encodeURIComponent(searchQuery);
-
-            foundId = await fetchSearch(targetUrl);
-            if (foundId) break;
-
-            foundId = await fetchSearch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`);
-            if (foundId) break;
-
-            try {
-                let res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
-                if (res.ok) {
-                    let wrapper = await res.json();
-                    let data = JSON.parse(wrapper.contents);
-                    let items = data.items || data;
-                    if (items && items.length > 0) {
-                        let video = items.find(item => item.type === "video" || item.videoId || (item.url && item.url.includes('/watch?v=')));
-                        if (video) {
-                            foundId = video.videoId || (video.url ? video.url.split('v=')[1] : null);
-                            foundTitle = video.title || "";
-                        }
-                        if (!foundId && items[0].videoId) {
-                            foundId = items[0].videoId;
-                            foundTitle = items[0].title || "";
-                        }
-                        if (foundId) break;
+        // Try Invidious Fallback
+        if (!foundId) {
+            const instances = ['https://invidious.nerdvpn.de/api/v1/search?q=', 'https://invidious.lunar.icu/api/v1/search?q='];
+            for (let baseUrl of instances) {
+                try {
+                    let res = await fetch(baseUrl + encodeURIComponent(cleanCacheQuery));
+                    let data = await res.json();
+                    let video = data.find(item => item.videoId);
+                    if (video) {
+                        foundId = video.videoId;
+                        foundTitle = video.title;
+                        break;
                     }
-                }
-            } catch (e) { }
+                } catch (e) { continue; }
+            }
+        }
+
+        // --- SAVE TO CACHE (Only if result found via API) ---
+        if (foundId && foundTitle) {
+            console.log("✨ Found via API:", foundId)
+            fetch(CACHE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    query: cleanCacheQuery, // 💾 Saves structural string '14 karaoke' 
+                    videoId: foundId, 
+                    videoTitle: foundTitle 
+                })
+            })
+            .then(res => {
+                if (res.ok) console.log("💾 Successfully Saved to Supabase Cloud Cache!");
+            })
+            .catch(e => console.error("Cache Save Error:", e));
         }
     }
 
+    // 3. Finalize UI state and handle results
     searchBtn.innerText = originalText;
     searchBtn.disabled = false;
 
     if (foundId) {
         document.getElementById('searchInput').value = "";
-        handleFoundVideo(foundId, playNow, foundTitle || searchQuery, foundId ? `https://img.youtube.com/vi/${foundId}/mqdefault.jpg` : null);
+        handleFoundVideo(foundId, playNow, foundTitle || cleanCacheQuery);
     } else {
         alert("Search failed. Please try a different song or paste a YouTube URL.");
     }
@@ -328,7 +342,7 @@ async function loadVideo(playNow = true) {
 // =========================================================================
 let audioContext;
 let micAnalyser;
-let micBuffer; // Time-domain array buffer for Autocorrelation
+let micBuffer; 
 let micStream;
 let visualizerInitialized = false;
 
@@ -339,7 +353,7 @@ let scoringInterval;
 let isScoreRevealed = false;
 let scoreAudio = null;
 
-let lastDetectedPitch = 0; // Tracks note changes for stability analytics
+let lastDetectedPitch = 0; 
 
 async function toggleVisualizer() {
     const statusEl = document.getElementById('audioStatus');
@@ -366,7 +380,6 @@ async function toggleVisualizer() {
         }
         
         micAnalyser = audioContext.createAnalyser();
-        // Set fftSize high (2048) to capture detailed time-domain samples for accurate pitch analysis
         micAnalyser.fftSize = 2048; 
         
         const micSource = audioContext.createMediaStreamSource(micStream);
@@ -393,7 +406,7 @@ async function toggleVisualizer() {
 
 function startScoring() {
     if (scoringInterval) clearInterval(scoringInterval);
-    scoringInterval = setInterval(updateScore, 200); // Evaluates 5 frames per second
+    scoringInterval = setInterval(updateScore, 200); 
 }
 
 function stopScoring() {
@@ -401,12 +414,7 @@ function stopScoring() {
     scoringInterval = null;
 }
 
-/**
- * Time-Domain Autocorrelation Pitch Extraction Algorithm
- * Calculates fundamental frequency (f0) from raw micro-buffer data arrays.
- */
 function autoCorrelate(buffer, sampleRate) {
-    // 1. Evaluate signal root mean square (RMS) amplitude energy
     let size = buffer.length;
     let rms = 0;
 
@@ -416,10 +424,8 @@ function autoCorrelate(buffer, sampleRate) {
     }
     rms = Math.sqrt(rms / size);
     
-    // Noise floor gate: Signal too quiet to track pitch cleanly
     if (rms < 0.015) return -1; 
 
-    // 2. Truncate signal window boundaries to extract clear periodic peaks
     let r1 = 0, r2 = size - 1;
     let thres = 0.2;
     for (let i = 0; i < size / 2; i++) {
@@ -431,7 +437,6 @@ function autoCorrelate(buffer, sampleRate) {
     let clippedBuffer = buffer.slice(r1, r2);
     let clippedSize = clippedBuffer.length;
 
-    // 3. Run Autocorrelation processing shifts
     let c = new Float32Array(clippedSize);
     for (let i = 0; i < clippedSize; i++) {
         for (let j = 0; j < clippedSize - i; j++) {
@@ -439,11 +444,9 @@ function autoCorrelate(buffer, sampleRate) {
         }
     }
 
-    // Find the first zero-crossing point
     let d = 0;
     while (c[d] > 0) d++;
     
-    // Detect principal frequency peaks beyond zero-cross thresholds
     let maxVal = -1;
     let maxPeriod = -1;
     for (let i = d; i < clippedSize; i++) {
@@ -454,12 +457,9 @@ function autoCorrelate(buffer, sampleRate) {
     }
 
     let fundamentalFrequency = sampleRate / maxPeriod;
-    
-    // Standard human vocal capability range threshold verification (50Hz - 2000Hz)
     if (fundamentalFrequency > 50 && fundamentalFrequency < 2000) {
         return fundamentalFrequency;
     }
-    
     return -1;
 }
 
@@ -471,52 +471,37 @@ function updateScore() {
 
     micAnalyser.getFloatTimeDomainData(micBuffer);
 
-    // 1. Calculate precise RMS Volume Energy
     let sumSquares = 0;
     for (let i = 0; i < micBuffer.length; i++) {
         sumSquares += micBuffer[i] * micBuffer[i];
     }
     let vocalVolumeEnergy = Math.sqrt(sumSquares / micBuffer.length) * 100;
 
-    // 2. Extract pitch
     let currentPitch = autoCorrelate(micBuffer, audioContext.sampleRate);
-
     possiblePoints += 1.0;
 
-    // TIGHTENED FILTER: Must be louder than 3.0 to register as intentional singing (Filters background noise)
     if (vocalVolumeEnergy > 3.0) {
         let frameMultiplier = 1.0;
 
         if (currentPitch > 0) {
             if (lastDetectedPitch > 0) {
                 let pitchDelta = Math.abs(currentPitch - lastDetectedPitch);
-                
-                // ACCURACY ADJUSTMENT:
-                // If pitch is perfectly flat down to 0Hz difference over multiple frames, 
-                // they are probably just monotone humming or cheating. Scale points back.
                 if (pitchDelta === 0) {
                     frameMultiplier = 0.3; 
-                } 
-                // Good melodic movement (normal singing transitions between notes)
-                else if (pitchDelta > 5 && pitchDelta < 40) {
-                    frameMultiplier = 1.3; // Reward active singing
-                } 
-                // Chaotic, screeching, or talking noise
-                else if (pitchDelta > 120) {
+                } else if (pitchDelta > 5 && pitchDelta < 40) {
+                    frameMultiplier = 1.3; 
+                } else if (pitchDelta > 120) {
                     frameMultiplier = 0.2; 
                 }
             }
             lastDetectedPitch = currentPitch;
         } else {
-            // No clear musical tone found
             frameMultiplier = 0.4;
         }
 
-        // Calculate and cap the tick earned
         let earnedTick = Math.min((vocalVolumeEnergy / 15) * frameMultiplier, 1.2);
         earnedPoints += earnedTick;
     } else {
-        // Singer went quiet, clear history tracking parameters safely
         lastDetectedPitch = 0;
     }
 
@@ -524,7 +509,6 @@ function updateScore() {
         currentScore = (earnedPoints / possiblePoints) * 100;
     }
 
-    // Cap the final scoring ranges clearly
     const displayScore = Math.min(Math.floor(currentScore), 100);
     document.getElementById('scoreBarFill').style.width = displayScore + "%";
     document.getElementById('liveScoreValue').innerText = displayScore;
@@ -689,7 +673,6 @@ function startSync() {
                 }
             }
         }
-
     }, 100);
 }
 
@@ -729,13 +712,11 @@ document.addEventListener('keydown', function (event) {
     }
 });
 
-
-/* Automatic display detection: updates CSS variables to better match actual device width/DPR */
 (function(){
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
     function applyMobileVariables(width) {
-        const base = 375; // design reference width
+        const base = 375; 
         const ratio = clamp(width / base, 0.6, 1);
 
         const buttonSize = Math.round(clamp(44 * ratio, 34, 52));
@@ -751,17 +732,15 @@ document.addEventListener('keydown', function (event) {
         root.style.setProperty('--mobile-song-thumb-height', thumbH + 'px');
         root.style.setProperty('--mobile-score-number-size', scoreNumber + 'px');
 
-        // expose read-only vars for debugging / custom rules if needed
         root.style.setProperty('--detected-viewport-width', Math.round(width) + 'px');
         root.style.setProperty('--detected-device-dpr', (window.devicePixelRatio || 1).toString());
     }
 
     function detectAndApply() {
-    const chosen = window.innerWidth || document.documentElement.clientWidth || screen.width || 375;
-    applyMobileVariables(chosen);
-}
+        const chosen = window.innerWidth || document.documentElement.clientWidth || screen.width || 375;
+        applyMobileVariables(chosen);
+    }
 
-    // Throttle resize calls
     let resizeTimer = null;
     function schedule() {
         if (resizeTimer) clearTimeout(resizeTimer);
@@ -771,6 +750,5 @@ document.addEventListener('keydown', function (event) {
     window.addEventListener('resize', schedule);
     window.addEventListener('orientationchange', schedule);
     document.addEventListener('DOMContentLoaded', detectAndApply);
-    // Run immediately in case script is loaded after DOM
     detectAndApply();
 })();
