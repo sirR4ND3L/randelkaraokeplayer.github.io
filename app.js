@@ -7,7 +7,7 @@ const KaraokeApp = {
     // --- 1. Configuration & Constants ---
     // Stores API keys, endpoints, and asset paths used throughout the app.
     CONFIG: {
-        YOUTUBE_API_KEY: "AIzaSyAx9Q3ApfVMAsUauWzvwYW4B_f4Z2HX0z8",
+        YOUTUBE_API_KEY: "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI",
         CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
         INVIDIOUS_INSTANCES: [
             'https://invidious.nerdvpn.de/api/v1/search?q=',
