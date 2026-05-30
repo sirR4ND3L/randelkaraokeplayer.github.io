@@ -270,7 +270,7 @@ const KaraokeApp = {
 
     // --- Audio & Scoring ---
 
-    async toggleMic() {
+    async toggleVisualizer() {
         const { audioStatus, audioText, scoreMeter, liveScoreBadge } = this.elements;
 
         if (this.state.isMicActive) {
@@ -503,6 +503,15 @@ const KaraokeApp = {
         apply();
     }
 };
+
+// Global exposure for HTML inline event handlers (compatibility layer)
+window.toggleVisualizer = () => KaraokeApp.toggleVisualizer();
+window.loadVideo = (playNow) => KaraokeApp.handleSearch(playNow);
+window.restartVideo = () => KaraokeApp.restartVideo();
+window.toggleFullscreen = () => KaraokeApp.toggleFullscreen();
+window.changeVolume = (val) => KaraokeApp.state.player?.setVolume(val);
+window.playVideo = () => KaraokeApp.state.player?.playVideo();
+window.pauseVideo = () => KaraokeApp.state.player?.pauseVideo();
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => KaraokeApp.init());
