@@ -4,9 +4,10 @@
  */
 
 const KaraokeApp = {
-    // Configuration & Constants
+    // --- 1. Configuration & Constants ---
+    // Stores API keys, endpoints, and asset paths used throughout the app.
     CONFIG: {
-        YOUTUBE_API_KEY: "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI",
+        YOUTUBE_API_KEY: "AIzaSyAx9Q3ApfVMAsUauWzvwYW4B_f4Z2HX0z8",
         CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
         INVIDIOUS_INSTANCES: [
             'https://invidious.nerdvpn.de/api/v1/search?q=',
@@ -19,7 +20,8 @@ const KaraokeApp = {
         }
     },
 
-    // Application State
+    // --- 2. Application State ---
+    // Centralized store for the app's current status, timers, and audio objects.
     state: {
         player: null,
         songQueue: [],
@@ -37,9 +39,12 @@ const KaraokeApp = {
         lastDetectedPitch: 0
     },
 
-    // Cached DOM Elements
+    // --- 3. Cached DOM Elements ---
+    // Stores references to frequently accessed HTML elements to avoid repeated lookups.
     elements: {},
 
+    // --- 4. Initialization ---
+    // The entry point that kicks off API loading and element caching.
     init() {
         this.cacheElements();
         this.loadYouTubeAPI();
@@ -47,19 +52,22 @@ const KaraokeApp = {
         this.initMobileScaling();
     },
 
+    // Helper to store DOM nodes in the `elements` object.
     cacheElements() {
         const ids = [
             'player', 'nowPlaying', 'playerPlaceholder', 'dynamicIsland', 
             'queueList', 'searchInput', 'videoContainer', 'audioStatus', 
             'audioText', 'scoreMeter', 'liveScoreBadge', 'scoreBarFill', 
             'liveScoreValue', 'liveScorePlayer', 'scoreOverlay', 'finalScore', 
-            'finalRank', 'finalMessage'
+            'finalRank', 'finalMessage', 'micPulseIndicator'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
         this.elements.searchContainer = document.querySelector('.search-container');
         this.elements.searchButtons = document.querySelectorAll('.search-container button');
     },
 
+    // --- 5. YouTube API Integration ---
+    // Logic for loading and interacting with the YouTube IFrame Player API.
     loadYouTubeAPI() {
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -68,6 +76,7 @@ const KaraokeApp = {
         window.onYouTubeIframeAPIReady = () => this.onYouTubeIframeAPIReady();
     },
 
+    // Callback fired when the YouTube script is ready.
     onYouTubeIframeAPIReady() {
         this.state.player = new YT.Player('player', {
             height: '100%',
@@ -80,18 +89,21 @@ const KaraokeApp = {
         });
     },
 
+    // Setup tasks once the player is ready (e.g., volume sync).
     onPlayerReady() {
         this.startSync();
         this.state.player.setVolume(100);
     },
 
+    // Handles logic for when a song ends or is paused.
     onPlayerStateChange(event) {
         if (event.data === YT.PlayerState.ENDED) {
             this.state.isMicActive ? this.showFinalScore() : this.playNextInQueue();
         }
     },
 
-    // --- Search Logic ---
+    // --- 6. Search Logic ---
+    // Processes user input, checks the local cache, and falls back to YouTube/Invidious APIs.
 
     async handleSearch(playNow = true) {
         const query = this.elements.searchInput.value.trim();
@@ -147,6 +159,7 @@ const KaraokeApp = {
         }
     },
 
+    // Fetches previously searched results from the custom backend.
     async fetchFromCache(query) {
         console.log(`🚀 Starting cache lookup for: ${query}`);
         try {
@@ -161,6 +174,7 @@ const KaraokeApp = {
         }
     },
 
+    // Primary search fallback using the official YouTube Data API.
     async fetchFromYouTubeAPI(query) {
         if (!this.CONFIG.YOUTUBE_API_KEY) return null;
         try {
@@ -170,6 +184,7 @@ const KaraokeApp = {
         } catch { return null; }
     },
 
+    // Secondary search fallback using public Invidious instances.
     async fetchFromInvidious(query) {
         for (let baseUrl of this.CONFIG.INVIDIOUS_INSTANCES) {
             try {
@@ -182,6 +197,7 @@ const KaraokeApp = {
         return null;
     },
 
+    // Saves new successful API search results to the backend cache.
     saveToCache(query, videoId, videoTitle) {
         fetch(this.CONFIG.CACHE_ENDPOINT, {
             method: 'POST',
@@ -195,7 +211,8 @@ const KaraokeApp = {
         .catch(e => console.error("Cache save error:", e));
     },
 
-    // --- Queue & Playback ---
+    // --- 7. Queue & Playback Management ---
+    // Logic for handling the song list, "Now Playing" UI, and video transitions.
 
     handleFoundVideo(id, playNow, title, thumbnail = null) {
         const song = { id, title: title || `Video: ${id}`, thumbnail: thumbnail || `https://img.youtube.com/vi/${id}/mqdefault.jpg` };
@@ -214,6 +231,7 @@ const KaraokeApp = {
         }
     },
 
+    // Logic for advancing to the next item in the songQueue.
     playNextInQueue() {
         this.resetScore();
         if (this.state.songQueue.length > 0) {
@@ -227,6 +245,7 @@ const KaraokeApp = {
         }
     },
 
+    // Updates the Dynamic Island and status text.
     updateNowPlayingUI(title) {
         const { nowPlaying, playerPlaceholder, dynamicIsland } = this.elements;
         if (title) {
@@ -240,6 +259,7 @@ const KaraokeApp = {
         }
     },
 
+    // Re-renders the "Up Next" list in the right panel.
     updateQueueUI() {
         const list = this.elements.queueList;
         if (this.state.songQueue.length === 0) {
@@ -263,29 +283,46 @@ const KaraokeApp = {
         });
     },
 
+    // Removes a specific song from the user's queue.
     removeFromQueue(index) {
         this.state.songQueue.splice(index, 1);
         this.updateQueueUI();
     },
 
-    // --- Audio & Scoring ---
+    // --- 8. Audio Analysis & Scoring Engine ---
+    // Handles microphone access, real-time pitch detection, and score calculation.
 
     async toggleVisualizer() {
-        const { audioStatus, audioText, scoreMeter, liveScoreBadge } = this.elements;
+        const { audioStatus, audioText, scoreMeter, liveScoreBadge, micPulseIndicator } = this.elements;
 
         if (this.state.isMicActive) {
             this.stopScoring();
-            if (this.state.micStream) this.state.micStream.getTracks().forEach(t => t.stop());
+            if (this.state.micStream) {
+                this.state.micStream.getTracks().forEach(t => t.stop());
+                this.state.micStream = null;
+            }
             this.state.isMicActive = false;
+            
             audioStatus.classList.remove('active');
             audioText.innerText = "Mic: Off";
             [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "none");
+                micPulseIndicator.style.display = 'none';
             return;
         }
 
         try {
-            this.state.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            if (!this.state.audioContext) this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            // Disabling 'autoGainControl' prevents the browser from lowering your mic volume while you sing.
+            // We keep 'echoCancellation' enabled to help the app ignore the music from your speakers.
+            this.state.micStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: false
+                } 
+            });
+
+            if (!this.state.audioContext) {
+                this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
             
             this.state.micAnalyser = this.state.audioContext.createAnalyser();
             this.state.micAnalyser.fftSize = 2048;
@@ -296,12 +333,44 @@ const KaraokeApp = {
             audioStatus.classList.add('active');
             audioText.innerText = "Mic: On";
             [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "flex");
+            
             this.startScoring();
+            this.runPulseAnimation();
         } catch (err) {
+            console.error("Microphone access error:", err);
             alert("Microphone access is required for scoring.");
+            this.state.isMicActive = false;
         }
     },
 
+    // Smooth animation loop for the microphone pulse effect (RequestAnimationFrame).
+    runPulseAnimation() {
+        if (!this.state.isMicActive || !this.state.micAnalyser) return;
+        
+        const { micPulseIndicator } = this.elements;
+        if (!micPulseIndicator) return;
+
+        this.state.micAnalyser.getFloatTimeDomainData(this.state.micBuffer);
+        let sum = 0;
+        for (let i = 0; i < this.state.micBuffer.length; i++) {
+            sum += this.state.micBuffer[i] * this.state.micBuffer[i];
+        }
+        const volume = Math.sqrt(sum / this.state.micBuffer.length) * 100;
+
+        if (volume > 1.5) {
+            const scale = 1 + (volume / 65);
+            micPulseIndicator.style.display = 'inline-block';
+            micPulseIndicator.style.transform = `scale(${scale})`;
+            micPulseIndicator.style.backgroundColor = '#70ff9d';
+        } else {
+            micPulseIndicator.style.transform = 'scale(1)';
+            micPulseIndicator.style.backgroundColor = '#4cd964';
+        }
+
+        requestAnimationFrame(() => this.runPulseAnimation());
+    },
+
+    // Periodic task that calculates points based on vocal energy and pitch stability.
     updateScore() {
         if (!this.state.isMicActive || !this.state.micAnalyser) return;
         if (this.state.player.getPlayerState() !== YT.PlayerState.PLAYING) return;
@@ -312,20 +381,34 @@ const KaraokeApp = {
         const energy = Math.sqrt(sum / this.state.micBuffer.length) * 100;
         const pitch = this.autoCorrelate(this.state.micBuffer, this.state.audioContext.sampleRate);
 
+        // The denominator always grows while the song plays
         this.state.possiblePoints += 1;
+
         if (energy > 3.0) {
+            // Increase logic: reward stable pitch and high vocal energy
             let mult = pitch > 0 ? (Math.abs(pitch - this.state.lastDetectedPitch) > 5 ? 1.3 : 0.3) : 0.4;
             this.state.earnedPoints += Math.min((energy / 15) * mult, 1.2);
             this.state.lastDetectedPitch = pitch;
         }
 
-        this.state.currentScore = (this.state.earnedPoints / this.state.possiblePoints) * 100;
+        // Calculation: Sticky scoring (only goes up) until 80.
+        // Once at 80, accuracy-based decrease is allowed, but we prevent a sudden "snap" to a low average.
+        const rawScore = (this.state.earnedPoints / this.state.possiblePoints) * 100;
+
+        if (rawScore > this.state.currentScore) {
+            this.state.currentScore = rawScore;
+        } else if (this.state.currentScore >= 80) {
+            // Allow decrease only if we are in the "Pro" zone, but don't fall below the 80 threshold
+            this.state.currentScore = Math.max(80, rawScore);
+        }
+        
         const display = Math.min(Math.floor(this.state.currentScore), 100);
         this.elements.scoreBarFill.style.width = display + "%";
         this.elements.liveScoreValue.innerText = display;
         this.elements.liveScorePlayer.innerText = display;
     },
 
+    // Triggers the end-of-song overlay and calculates the final rank.
     showFinalScore() {
         if (this.state.isScoreRevealed) return;
         this.state.isScoreRevealed = true;
@@ -345,6 +428,7 @@ const KaraokeApp = {
         this.startFinalScoreTimer();
     },
 
+    // Determines label and color based on the numeric score.
     getRankData(score) {
         if (score >= 95) return { rank: 'legendary', label: "Legendary", color: "#ffcc00", msg: "Masterpiece!" };
         if (score >= 85) return { rank: 'rockstar', label: "Rockstar", color: "#007aff", msg: "Incredible!" };
@@ -353,6 +437,7 @@ const KaraokeApp = {
         return { rank: 'beginner', label: "Beginner", color: "#ff3b30", msg: "Keep practicing!" };
     },
 
+    // Manages the countdown timer on the final score screen.
     startFinalScoreTimer() {
         let seconds = 15;
         const updateMsg = () => {
@@ -369,7 +454,8 @@ const KaraokeApp = {
         }, 1000);
     },
 
-    // --- Utilities ---
+    // --- 9. Utility Functions ---
+    // Generic helpers for string parsing, UI loading states, and audio processing.
 
     extractVideoId(query) {
         try {
@@ -380,22 +466,26 @@ const KaraokeApp = {
         return (query.length === 11 && !query.includes(' ')) ? query : null;
     },
 
+    // Toggles button loading states during async search operations.
     setSearchLoading(isLoading, btn, text) {
         btn.innerText = isLoading ? "Searching..." : text;
         btn.disabled = isLoading;
         this.elements.searchContainer.classList.toggle('loading', isLoading);
     },
 
+    // Starts the internal scoring interval (200ms).
     startScoring() {
         if (this.state.scoringInterval) clearInterval(this.state.scoringInterval);
         this.state.scoringInterval = setInterval(() => this.updateScore(), 200);
     },
 
+    // Stops the internal scoring interval.
     stopScoring() {
         clearInterval(this.state.scoringInterval);
         this.state.scoringInterval = null;
     },
 
+    // Resets points and score UI for a new song.
     resetScore() {
         Object.assign(this.state, { currentScore: 0, earnedPoints: 0, possiblePoints: 0, isScoreRevealed: false, lastDetectedPitch: 0 });
         this.elements.scoreBarFill.style.width = "0%";
@@ -403,6 +493,7 @@ const KaraokeApp = {
         this.elements.liveScorePlayer.innerText = "0";
     },
 
+    // Complex math for detecting the fundamental frequency (pitch) of mic input.
     autoCorrelate(buffer, sampleRate) {
         let size = buffer.length;
         let rms = 0;
@@ -427,15 +518,17 @@ const KaraokeApp = {
         return (freq > 50 && freq < 2000) ? freq : -1;
     },
 
+    // Plays the celebration or failure audio clip.
     playScoreSound(rank) {
         if (this.state.scoreAudio) this.state.scoreAudio.pause();
         const sound = ['legendary', 'rockstar'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.CHEER : 
                       ['pro', 'amateur'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.SUCCESS : this.CONFIG.SOUND_EFFECTS.FAIL;
         this.state.scoreAudio = new Audio(sound);
-        this.state.scoreAudio.volume = 0.5;
+        this.state.scoreAudio.volume = 0.25;
         this.state.scoreAudio.play().catch(() => {});
     },
 
+    // Closes the score overlay and resumes the app flow.
     closeScore() {
         if (this.state.scoreAudio) this.state.scoreAudio.pause();
         this.elements.scoreOverlay.classList.remove('active');
@@ -443,6 +536,7 @@ const KaraokeApp = {
         if (this.state.isMicActive) this.startScoring();
     },
 
+    // Sync checker to detect when the YouTube video is nearing its end.
     startSync() {
         setInterval(() => {
             if (!this.state.player?.getCurrentTime) return;
@@ -453,13 +547,15 @@ const KaraokeApp = {
         }, 100);
     },
 
-    // --- Event Listeners ---
+    // --- 10. Event Listeners & UI Helpers ---
+    // Logic for keyboard shortcuts and responsive layout adjustments.
 
     attachEventListeners() {
         document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
         // The volume change and fullscreen toggle can be called via buttons in HTML
     },
 
+    // Maps physical keys (Z, X, C, B, F) to app actions.
     handleGlobalKeyDown(event) {
         if (document.activeElement === this.elements.searchInput) {
             if (event.key === 'Enter') this.handleSearch(!event.shiftKey);
@@ -476,20 +572,24 @@ const KaraokeApp = {
         if (action) action();
     },
 
+    // Reloads the current video and resets the score.
     restartVideo() {
         this.elements.scoreOverlay.classList.remove('active');
         this.resetScore();
         this.state.player.seekTo(0);
+        if (this.elements.playerPlaceholder) this.elements.playerPlaceholder.classList.add('hidden');
         this.state.player.playVideo();
         if (this.state.isMicActive) this.startScoring();
     },
 
+    // Fullscreen API toggle for the video container.
     toggleFullscreen() {
         const container = this.elements.videoContainer;
         if (!document.fullscreenElement) container.requestFullscreen().catch(() => {});
         else document.exitFullscreen();
     },
 
+    // Dynamically updates CSS variables for better scaling on mobile devices.
     initMobileScaling() {
         const apply = () => {
             const w = window.innerWidth || screen.width;
@@ -504,7 +604,8 @@ const KaraokeApp = {
     }
 };
 
-// Global exposure for HTML inline event handlers (compatibility layer)
+// --- 11. Compatibility Layer ---
+// Exposes specific methods to the global window object for legacy HTML 'onclick' support.
 window.toggleVisualizer = () => KaraokeApp.toggleVisualizer();
 window.loadVideo = (playNow) => KaraokeApp.handleSearch(playNow);
 window.restartVideo = () => KaraokeApp.restartVideo();
@@ -512,6 +613,9 @@ window.toggleFullscreen = () => KaraokeApp.toggleFullscreen();
 window.changeVolume = (val) => KaraokeApp.state.player?.setVolume(val);
 window.playVideo = () => KaraokeApp.state.player?.playVideo();
 window.pauseVideo = () => KaraokeApp.state.player?.pauseVideo();
+window.cancelCurrentSong = () => KaraokeApp.playNextInQueue();
+window.closeScore = () => KaraokeApp.closeScore();
 
-// Initialize application
+// --- 12. App Launch ---
+// Self-executing initialization on DOM load.
 document.addEventListener('DOMContentLoaded', () => KaraokeApp.init());
