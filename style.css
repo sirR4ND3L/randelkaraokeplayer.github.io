@@ -377,6 +377,16 @@ button.mic-status.active {
     box-shadow: 0 0 15px rgba(76, 217, 100, 0.3);
 }
 
+#micPulseIndicator {
+    width: 15px;
+    height: 15px;
+    background-color: transparent;
+    border: 1px solid #4cd964;
+    border-radius: 50%;
+    transition: transform 0.05s ease-out; /* Fast but smooth */
+    display: none;
+}
+
 /* Search & Controls */
 .search-container {
     width: 100%;
