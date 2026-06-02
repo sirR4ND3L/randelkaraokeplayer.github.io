@@ -59,11 +59,12 @@ const KaraokeApp = {
             'queueList', 'searchInput', 'videoContainer', 'audioStatus', 
             'audioText', 'scoreMeter', 'liveScoreBadge', 'scoreBarFill', 
             'liveScoreValue', 'liveScorePlayer', 'scoreOverlay', 'finalScore', 
-            'finalRank', 'finalMessage', 'micPulseIndicator'
+            'finalRank', 'finalMessage', 'micPulseIndicator', 'codeSearchInput',
+            'textsearchContainer', 'codeSearchContainer', 'toggleSearchBtn',
+            'textPlayBtn', 'textReserveBtn', 'codePlayBtn', 'codeReserveBtn',
+            'alertTitle', 'alertMessage', 'customAlert'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
-        this.elements.searchContainer = document.querySelector('.search-container');
-        this.elements.searchButtons = document.querySelectorAll('.search-container button');
     },
 
     // --- 5. YouTube API Integration ---
@@ -119,10 +120,10 @@ const KaraokeApp = {
             return;
         }
 
-        const searchBtn = playNow ? this.elements.searchButtons[0] : this.elements.searchButtons[1];
+        const searchBtn = playNow ? this.elements.textPlayBtn : this.elements.textReserveBtn;
         const originalText = searchBtn.innerText;
 
-        this.setSearchLoading(true, searchBtn);
+        this.setSearchLoading(true, searchBtn, originalText, this.elements.textsearchContainer);
 
         try {
             let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
@@ -150,12 +151,49 @@ const KaraokeApp = {
                 this.elements.searchInput.value = "";
                 this.handleFoundVideo(result.id, playNow, result.title);
             } else {
-                alert("Search failed. Please try a different song.");
+                this.showCustomAlert("Song not found!");
             }
         } catch (err) {
             console.error("Search error:", err);
         } finally {
-            this.setSearchLoading(false, searchBtn, originalText);
+            this.setSearchLoading(false, searchBtn, originalText, this.elements.textsearchContainer);
+        }
+    },
+
+    // --- New Search by ID function ---
+    async playByCode(playNow = true) {
+        const input = this.elements.codeSearchInput;
+        const id = input.value.trim();
+
+        if (!id) return;
+        
+        console.log(`🔢 Looking up song code: ${id}`);
+
+        const searchBtn = playNow ? this.elements.codePlayBtn : this.elements.codeReserveBtn;
+        const originalText = searchBtn.innerText;
+
+        this.setSearchLoading(true, searchBtn, originalText, this.elements.codeSearchContainer);
+
+        try {
+            // Fetching from your backend using the ID parameter
+            const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(id)}`);
+            const data = await res.json();
+            
+            input.value = "";
+
+            if (data && data.videoId) {
+                console.log(`✅ Found song: (Number: ${id}) (Title: ${data.videoTitle}) (ID: ${data.videoId})`);
+                this.handleFoundVideo(data.videoId, playNow, data.videoTitle);
+                this.elements.codeSearchInput.value = "";
+                console.log("🎉 Successfully added song using number!");
+            } else {
+                this.showCustomAlert("Song code not found!");
+            }
+        } catch (err) {
+            console.error("Code lookup error:", err);
+            this.showCustomAlert("Error connecting to database.");
+        } finally {
+            this.setSearchLoading(false, searchBtn, originalText, this.elements.codeSearchContainer);
         }
     },
 
@@ -164,9 +202,20 @@ const KaraokeApp = {
         console.log(`🚀 Starting cache lookup for: ${query}`);
         try {
             const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?query=${encodeURIComponent(query)}`);
+            
+            // 1. Explicity check for 204 No Content
+            if (res.status === 204) {
+                console.log("📦 Cache returned 204: No entry found for this query.")
+                return null;
+            }
+            
+            // 2. Check for other non-OK responses
             if (!res.ok) return null;
+
+            // 3. Now it is safe to parse JSON
             const data = await res.json();
             console.log("📦 Cache Response:", data);
+            
             return (data.found || data.videoId) ? { id: data.videoId, title: data.videoTitle || data.title } : null;
         } catch (err) {
             console.error(`❌ Cache fetch error: ${err.message}`);
@@ -338,7 +387,7 @@ const KaraokeApp = {
             this.runPulseAnimation();
         } catch (err) {
             console.error("Microphone access error:", err);
-            alert("Microphone access is required for scoring.");
+            this.showCustomAlert("Microphone access is required for scoring. Please allow microphone permissions and try again.");
             this.state.isMicActive = false;
         }
     },
@@ -439,24 +488,33 @@ const KaraokeApp = {
 
     // Manages the countdown timer on the final score screen.
     startFinalScoreTimer() {
-        let seconds = 15;
-        const updateMsg = () => {
-            this.elements.finalMessage.innerText = this.state.songQueue.length > 0 ? `Next song in ${seconds}s...` : `Closing in ${seconds}s...`;
+        const audio = this.state.scoreAudio;
+
+        const startCountdown = (duration) => {
+            let seconds = Math.ceil(duration || 15);
+            const updateMsg = () => {
+                this.elements.finalMessage.innerText = this.state.songQueue.length > 0 ? `Next song in ${seconds}s...` : `Closing in ${seconds}s...`;
+            };
+
+            updateMsg();
+            const timer = setInterval(() => {
+                seconds--;
+                if (seconds <= 0 || !this.elements.scoreOverlay.classList.contains('active')) {
+                    clearInterval(timer);
+                    this.closeScore();
+                } else updateMsg();
+            }, 1000);
         };
 
-        updateMsg();
-        const timer = setInterval(() => {
-            seconds--;
-            if (seconds <= 0 || !this.elements.scoreOverlay.classList.contains('active')) {
-                clearInterval(timer);
-                this.closeScore();
-            } else updateMsg();
-        }, 1000);
+        if (audio && isNaN(audio.duration)) {
+            audio.addEventListener('loadedmetadata', () => startCountdown(audio.duration), { once: true });
+        } else {
+            startCountdown(audio ? audio.duration : 15);
+        }
     },
 
     // --- 9. Utility Functions ---
     // Generic helpers for string parsing, UI loading states, and audio processing.
-
     extractVideoId(query) {
         try {
             const url = new URL(query);
@@ -467,10 +525,10 @@ const KaraokeApp = {
     },
 
     // Toggles button loading states during async search operations.
-    setSearchLoading(isLoading, btn, text) {
+    setSearchLoading(isLoading, btn, text, container) {
         btn.innerText = isLoading ? "Searching..." : text;
         btn.disabled = isLoading;
-        this.elements.searchContainer.classList.toggle('loading', isLoading);
+        if (container) container.classList.toggle('loading', isLoading);
     },
 
     // Starts the internal scoring interval (200ms).
@@ -549,6 +607,34 @@ const KaraokeApp = {
 
     // --- 10. Event Listeners & UI Helpers ---
     // Logic for keyboard shortcuts and responsive layout adjustments.
+    showCustomAlert(message, title = "System Alert!") {
+        this.elements.alertTitle.innerText = title;
+        this.elements.alertMessage.innerText = message;
+        this.elements.customAlert.style.display = 'flex';
+    },
+
+    closeCustomAlert() {
+        this.elements.customAlert.style.display = 'none';
+    },
+
+    toggleSearchMode() {
+        const textContainer = this.elements.textsearchContainer;
+        const codeContainer = this.elements.codeSearchContainer;
+        const toggleBtn = this.elements.toggleSearchBtn;
+
+        const isTextVisible = textContainer.style.display !== 'none';
+
+        if (isTextVisible) {
+            textContainer.style.display = 'none';
+            codeContainer.style.display = '';
+            toggleBtn.innerText = "Switch to Text Search";
+        } else {
+            textContainer.style.display = '';
+            codeContainer.style.display = 'none';
+            toggleBtn.innerText = "Switch to Number Search";
+        }
+    },
+
 
     attachEventListeners() {
         document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
@@ -557,8 +643,14 @@ const KaraokeApp = {
 
     // Maps physical keys (Z, X, C, B, F) to app actions.
     handleGlobalKeyDown(event) {
-        if (document.activeElement === this.elements.searchInput) {
-            if (event.key === 'Enter') this.handleSearch(!event.shiftKey);
+        if (document.activeElement === this.elements.searchInput || document.activeElement === this.elements.codeSearchInput) {
+            if (event.key === 'Enter') {
+                if (document.activeElement === this.elements.searchInput) {
+                    this.handleSearch(!event.shiftKey);
+                } else {
+                    this.playByCode(!event.shiftKey);
+                }
+            }
             return;
         }
         const map = {
@@ -566,7 +658,8 @@ const KaraokeApp = {
             'x': () => this.state.player.pauseVideo(),
             'c': () => this.restartVideo(),
             'b': () => this.playNextInQueue(),
-            'f': () => this.toggleFullscreen()
+            'f': () => this.toggleFullscreen(),
+            'm': () => this.toggleVisualizer()
         };
         const action = map[event.key.toLowerCase()];
         if (action) action();
@@ -574,6 +667,11 @@ const KaraokeApp = {
 
     // Reloads the current video and resets the score.
     restartVideo() {
+        // Guard: Prevent restart logic if no video is currently loaded to avoid YouTube player errors.
+        if (!this.state.player || typeof this.state.player.getVideoData !== 'function' || !this.state.player.getVideoData().video_id) {
+            return;
+        }
+
         this.elements.scoreOverlay.classList.remove('active');
         this.resetScore();
         this.state.player.seekTo(0);
@@ -615,6 +713,9 @@ window.playVideo = () => KaraokeApp.state.player?.playVideo();
 window.pauseVideo = () => KaraokeApp.state.player?.pauseVideo();
 window.cancelCurrentSong = () => KaraokeApp.playNextInQueue();
 window.closeScore = () => KaraokeApp.closeScore();
+window.playByCode = (id) => KaraokeApp.playByCode(id);
+window.toggleSearchMode = () => KaraokeApp.toggleSearchMode();
+window.closeCustomAlert = () => KaraokeApp.closeCustomAlert();
 
 // --- 12. App Launch ---
 // Self-executing initialization on DOM load.

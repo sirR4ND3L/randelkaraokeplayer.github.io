@@ -43,6 +43,14 @@
 
 <body>
 
+    <div id="customAlert" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="alertTitle">Alert</h3>
+            <p id="alertMessage">Alert</p>
+            <button id="closeAlert" onclick="closeCustomAlert()">OK</button>
+        </div>
+    </div>
+    
     <div class="bg-blobs">
         <div class="blob"></div>
         <div class="blob"></div>
@@ -67,13 +75,26 @@
         </p>
     </div>
 
-    <div class="search-container glass-panel">
-        <label for="searchInput" class="sr-only">Search karaoke song</label>
-        <input type="text" id="searchInput" placeholder="Search for a song..." aria-label="Search karaoke song">
-        <button class="primary" onclick="loadVideo(true)" aria-label="Play video instantly">Play Now</button>
-        <button onclick="loadVideo(false)" aria-label="Reserve song to queue">Reserve</button>
+    <div class="search-layout-wrapper">
+        <div id="textsearchContainer" class="search-container glass-panel">
+            <label for="searchInput" class="sr-only">Search karaoke song</label>
+            <input type="text" id="searchInput" placeholder="Search for a song..." aria-label="Search karaoke song">
+            <button id="textPlayBtn" class="primary" onclick="loadVideo(true)" aria-label="Play video instantly">Play Now</button>
+            <button id="textReserveBtn" onclick="loadVideo(false)" aria-label="Reserve song to queue">Reserve</button>
+        </div>
+
+        <div id="codeSearchContainer" class="search-container code glass-panel" style="display: none;">
+            <label for="codeSearchInput" class="sr-only">Search karaoke song by ID</label>
+            <input type="number" id="codeSearchInput" placeholder="Enter Number... (Look the NUmber in the Songbook)" aria-label="Search karaoke song by ID">
+            <button id="codePlayBtn" class="primary" onclick="playByCode(true)" aria-label="Play song by ID">Play Now</button>
+            <button id="codeReserveBtn" onclick="playByCode(false)" aria-label="Reserve song to queue">Reserve</button>
+        </div>
+
+        <button id="toggleSearchBtn" onclick="toggleSearchMode()">Switch to Code Search</button>
     </div>
 
+
+    
     <div class="main-layout">
         <div class="left-panel">
             <div class="video-container" id="videoContainer">
@@ -144,7 +165,8 @@
                     <div class="shortcut-item"><span class="key">B</span> <span>Cancel</span></div>
                     <div class="shortcut-item"><span class="key">F</span> <span>Full</span></div>
                     <div class="shortcut-item"><span class="key">↵</span> <span>Enter</span></div>
-                    <div class="shortcut-item"><span class="key">⇧+↵</span> <span>Res</span></div>
+                    <div class="shortcut-item"><span class="key">⇧+↵</span> <span>Reset</span></div>
+                    <div class="shortcut-item"><span class="key">M</span> <span>Mic</span></div>
                 </div>
             </div>
         </div>

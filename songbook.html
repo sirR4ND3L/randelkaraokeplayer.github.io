@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Karaoke Songbook</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0a0a0c; /* Deep dark background */
+            color: var(--text-main);
+            padding: 40px;
+        }
+
+        h1 { font-weight: 300; letter-spacing: -1px; text-align: center; }
+
+        .header-actions {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px auto 40px;
+            max-width: 600px;
+        }
+
+        /* Glass Search Input */
+        #songFilter {
+            flex: 1;
+            margin: 0;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 12px 20px;
+            border-radius: 100px;
+            color: white;
+            backdrop-filter: blur(20px);
+            outline: none;
+        }
+
+        .print-btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 100px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .print-btn:hover { background: #0062cc; }
+
+        .songbook-wrapper {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .song-table {
+            flex: 1;
+            border-collapse: collapse;
+            background: var(--glass);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+        }
+
+        th {
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            color: rgba(255,255,255,0.4);
+            padding: 15px;
+            text-align: left;
+        }
+
+        td {
+            padding: 12px 15px;
+            font-size: 14px;
+            font-weight: 400;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Minimalist Number column */
+        td:first-child { color: #007AFF; font-variant-numeric: tabular-nums; }
+
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 20px !important;
+            }
+
+            /* Hide UI elements that shouldn't be on paper */
+            .no-print, #songFilter {
+                display: none !important;
+            }
+
+            h1 {
+                margin-top: 0 !important;
+                margin-bottom: 20px !important;
+            }
+
+            /* Ensure text is black and visible */
+            .song-table, td, th {
+                color: black !important;
+                border-bottom: 1px solid #eee !important;
+            }
+
+            tr {
+                break-inside: avoid; /* Prevents a single song from splitting across pages */
+            }
+
+            /* 4. Keep your wrapper layout intact */
+            .songbook-wrapper {
+                display: flex !important;
+                flex-direction: row !important;
+                gap: 20px !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Randel Karaoke Songbook</h1>
+    
+    <div class="header-actions no-print">
+        <input type="text" id="songFilter" onkeyup="filterSongs()" placeholder="Search title or artist...">
+        <button class="print-btn" onclick="printSongbook()">Print Songbook</button>
+    </div>
+
+    <div class="songbook-wrapper">
+        <table class="song-table">
+            <thead>
+                <tr><th>Number</th><th>Title</th><th>Artist</th></tr>
+            </thead>
+            <tbody id="leftTableBody">
+                </tbody>
+        </table>
+
+        <table class="song-table">
+            <thead>
+                <tr><th>Number</th><th>Title</th><th>Artist</th></tr>
+            </thead>
+            <tbody id="rightTableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18';
+        const SUPABASE_URL = 'https://blbwxnbbdsqkxbuvcrtn.supabase.co';
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+        async function loadSongbook() {
+            const { data, error } = await supabaseClient
+                .from('karaoke_search_cache')
+                .select('id, video_title')
+                .eq('is_verified', true)
+                .order('video_title', { ascending: true });
+
+            if (error) {
+                console.error("Error loading:", error);
+                return;
+            }
+
+            // Format the data for the renderer
+            const formattedSongs = data.map(song => {
+                const parts = song.video_title.split(' - ');
+                return {
+                    id: song.id,
+                    title: parts[0],
+                    artist: parts.slice(1).join(' - ') || 'N/A'
+                };
+            });
+
+            // Pass to the split-render function
+            renderSongbook(formattedSongs);
+        }
+        
+        function renderSongbook(songs) {
+            const half = Math.ceil(songs.length / 2);
+            const leftHalf = songs.slice(0, half);
+            const rightHalf = songs.slice(half);
+
+            const renderRows = (data) => data.map(song => 
+                `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
+            ).join('');
+
+            document.getElementById('leftTableBody').innerHTML = renderRows(leftHalf);
+            document.getElementById('rightTableBody').innerHTML = renderRows(rightHalf);
+        }
+
+        function filterSongs() {
+            const filter = document.getElementById('songFilter').value.toUpperCase();
+            const rows = document.querySelectorAll('.song-table tbody tr');
+            
+            rows.forEach(row => {
+                const text = row.innerText.toUpperCase();
+                row.style.display = text.indexOf(filter) > -1 ? "" : "none";
+            });
+        }
+
+        async function printSongbook() {
+            console.log("🖨️ Preparing songbook for print...");
+
+            // 1. Refresh data from the database to ensure the printout is up to date
+            await loadSongbook();
+
+            // 2. Clear the search filter before printing so all songs are visible
+            const filterInput = document.getElementById('songFilter');
+            filterInput.value = '';
+            filterSongs(); // Force show all rows
+
+            // 3. Small timeout to allow the DOM to re-render before the print dialog takes over
+            setTimeout(() => {
+                window.print();
+            }, 200);
+        }
+        
+        loadSongbook();
+    </script>
+</body>
+</html>

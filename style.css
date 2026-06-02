@@ -18,6 +18,7 @@
     --dynamic-island-bg: #000000;
     --panel-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     --transition-smooth: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    --text-alert-color: rgb(243, 52, 42);
 }
 
 * {
@@ -36,6 +37,55 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.15);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 5000;
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: center;
+    color: var(--text-primary);
+    width: min(90%, 400px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#alertTitle {
+    font-size: clamp(20px, 8vw, 30px);
+    font-family: Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-alert-color);
+    animation: alertTitlePulse 2s infinite ease-in-out;
+}
+
+#alertMessage {
+    font-size: 16px;
+    font-family: Arial, sans-serif;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+#closeAlert {
+    margin-top: 15px;
+}
+
+@keyframes alertTitlePulse {
+    0%, 100% { transform: scale(1.1); text-shadow: 0 0 10px rgba(243, 52, 42, 0.5); }
+    50% { transform: scale(1); text-shadow: 0 0 20px rgba(243, 52, 42, 0.8); }
 }
 
 /* Ambient Background Blobs */
@@ -321,6 +371,7 @@ iframe {
     letter-spacing: -1px;
     margin-bottom: 10px;
     background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.6) 100%);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -388,11 +439,20 @@ button.mic-status.active {
 }
 
 /* Search & Controls */
+.search-layout-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin: 24px 0;
+    gap: 16px;
+}
+
 .search-container {
     width: 100%;
     max-width: 800px;
-    padding: 8px;
-    margin-bottom: 30px;
+    padding: 6px 12px;
     display: flex;
     gap: 8px;
     border-radius: 100px;
@@ -402,6 +462,7 @@ button.mic-status.active {
     -webkit-backdrop-filter: blur(30px);
     transition: var(--transition-smooth);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    margin-bottom: 0 !important;
 }
 
 .search-container:focus-within {
@@ -410,7 +471,7 @@ button.mic-status.active {
     box-shadow: 0 0 25px rgba(0, 122, 255, 0.1), 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-#searchInput {
+#searchInput,#codeSearchInput {
     flex: 1;
     padding: 12px 30px;
     border-radius: 100px;
@@ -422,9 +483,37 @@ button.mic-status.active {
     font-family: inherit;
 }
 
-#searchInput::placeholder {
+#searchInput::placeholder,
+#codeSearchInput::placeholder {
     color: var(--text-tertiary);
 }
+
+#toggleSearchBtn {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: var(--transition-smooth);
+    font-family: inherit;
+    letter-spacing: 0.5px;
+    margin-top: -5px; /* Pulls the button up closer to the container */
+    margin-bottom: -5px; /* Pulls the button down closer to the container */
+    padding: 8px 16px;
+    border-radius: 100px;
+    cursor: pointer;
+}
+
+#toggleSearchBtn.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 
 .controls {
     margin-top: 24px;
@@ -811,7 +900,7 @@ button.cancel-btn:hover {
     line-height: 1;
     margin: 10px 0;
     background: linear-gradient(180deg, #fff 30%, var(--accent-color) 100%);
-    -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 30px rgba(0, 122, 255, 0.4));
     transform: scale(0.8);
@@ -918,6 +1007,7 @@ button.cancel-btn:hover {
     }
     .score-number {
         font-size: 64px !important; /* Scaled down from 120px to prevent overflow */
+        font-size: clamp(48px, 15vw, 80px) !important;
         margin: 6px 0 !important;
     }
     .score-message {
@@ -941,25 +1031,24 @@ button.cancel-btn:hover {
     }
 }
 
-/* 3. Polish General Mobile Portrait Layout (Viewport Width < 480px) */
-@media (max-width: 480px) {
+/* 3. Polish General Mobile Portrait Layout (Viewport Width < 540px) */
+@media (max-width: 540px) {
     .header-container {
-        top: 8px;
-        margin-bottom: 12px;
-        padding: 0 10px;
+        top: clamp(4px, 2vh, 16px);
+        margin-bottom: clamp(12px, 3vh, 28px);
     }
     .dynamic-island {
-        padding: 8px 18px;
-        min-width: 150px;
+        padding: 8px 16px;
+        min-width: 140px;
     }
     .dynamic-island h2 {
         font-size: 12px;
     }
     
     .search-container {
-        margin-bottom: 16px;
+        margin-bottom: 0;
         border-radius: 24px;
-        padding: 10px;
+        padding: clamp(8px, 2vw, 14px);
         display: grid;
         grid-template-columns: 1fr 1fr;
         grid-template-areas:
@@ -967,7 +1056,7 @@ button.cancel-btn:hover {
             "btn-play btn-reserve";
         gap: 8px;
     }
-    #searchInput {
+    #searchInput, #codeSearchInput {
         grid-area: input;
         width: 100%;
         padding: 10px 16px;
@@ -990,6 +1079,10 @@ button.cancel-btn:hover {
         justify-content: center;
     }
     
+    #toggleSearchBtn {
+        margin-top: -5px; /* Pulls the button up closer to the container */
+    }
+
     .left-panel {
         gap: 12px;
     }
@@ -1206,223 +1299,28 @@ button.cancel-btn:hover {
     font-family: 'Outfit', sans-serif !important;
 }
 
-/* 5. Ultra-Compact Small Mobile (Viewport Width < 345px) */
-@media (max-width: 345px) {
-    .header-container {
-        top: 6px;
-        margin-bottom: 8px;
-        padding: 0 8px;
+/* 5. Unified Scaling for Ultra-Compact Handsets (< 360px) */
+@media (max-width: 360px) {
+    :root {
+        --mobile-button-size: 38px;
+        --mobile-icon-size: 16px;
     }
-    .dynamic-island {
-        padding: 6px 14px;
-        min-width: 120px;
-        border-radius: 30px;
-    }
-    .dynamic-island h2 {
-        font-size: 10px;
-        gap: 6px;
-    }
-    
-    .search-container {
-        margin-bottom: 12px;
-        padding: 6px;
-        border-radius: 16px;
-        gap: 6px;
-    }
-    #searchInput {
-        padding: 8px 12px;
-        font-size: 13px;
-    }
-    .search-container button {
-        padding: 8px 10px !important;
-        font-size: 11px;
-        border-radius: 12px;
-    }
-    
-    .left-panel {
-        gap: 8px;
-    }
-    .controls {
-        padding: 12px !important;
-        gap: 12px !important;
-        margin-top: 8px !important;
-    }
-    .queue-container {
-        padding: 12px;
-        border-radius: 20px;
-    }
-    .queue-container h3 {
-        margin: 0 0 12px;
-        font-size: 14px;
-    }
-    .queue-list li {
-        padding: 10px;
-        gap: 10px;
-    }
-    .song-thumb {
-        width: var(--mobile-song-thumb-width, 50px);
-        height: var(--mobile-song-thumb-height, 38px);
-    }
-    .song-title {
-        font-size: 12px;
-    }
-    .song-meta {
-        font-size: 10px;
-    }
-    
-    .button-row {
-        gap: 8px !important;
-    }
-    .button-row button {
-        width: calc(var(--mobile-button-size, 44px) - 4px) !important;
-        height: calc(var(--mobile-button-size, 44px) - 4px) !important;
-    }
-    .button-row button .icon {
-        font-size: calc(var(--mobile-icon-size, 18px) - 2px) !important;
-    }
-    
-    button.mic-status {
-        top: 8px;
-        right: 8px;
-        font-size: 8px;
-        padding: 5px 10px;
-    }
-    .live-score-badge {
-        top: 8px;
-        left: 8px;
-        padding: 5px 10px;
-        border-radius: 10px;
-        font-size: 10px;
-    }
-    .live-score-badge .value {
-        font-size: 13px;
-    }
-    .score-bar-bg {
-        width: 30px;
-        height: 2px;
-    }
-    
-    .score-overlay {
-        padding: 12px !important;
-    }
-    .score-rank {
-        font-size: 11px !important;
-        letter-spacing: 1.5px !important;
-        margin-bottom: 2px !important;
-    }
-    .score-number {
-        font-size: calc(var(--mobile-score-number-size, 64px) * 0.8125) !important; /* fallback to ~52px */
-        margin: 4px 0 !important;
-    }
-    .score-message {
-        font-size: 11px !important;
-        margin-bottom: 8px !important;
-    }
-    .score-actions {
-        gap: 6px !important;
-    }
-    .score-actions button {
-        padding: 6px 12px !important;
-        font-size: 10px !important;
-        border-radius: 10px !important;
-    }
+    .dynamic-island { min-width: 120px; padding: 6px 12px; border-radius: 30px; }
+    .dynamic-island h2 { font-size: 10px; }
+    .search-container { gap: 4px; padding: 4px; border-radius: 16px; }
+    .search-container button { font-size: 11px; padding: 6px !important; border-radius: 12px; }
+    #searchInput, #codeSearchInput { padding: 8px 12px; font-size: 13px; }
+    .song-thumb { width: 45px; height: 34px; }
+    .song-title { font-size: 12px; }
+    .score-number { font-size: 48px !important; }
+    .controls, .queue-container { padding: 12px; border-radius: 20px; }
 }
 
-/* 6. Ultra-Compact Micro Mobile (Viewport Width < 285px) */
-@media (max-width: 285px) {
-    .header-container {
-        top: 4px;
-        margin-bottom: 6px;
-        padding: 0 6px;
-    }
-    .dynamic-island {
-        padding: 4px 12px;
-        min-width: 100px;
-        border-radius: 28px;
-    }
-    .dynamic-island h2 {
-        font-size: 9px;
-        gap: 4px;
-    }
-    .search-container {
-        margin-bottom: 10px;
-        padding: 4px;
-        border-radius: 14px;
-        gap: 4px;
-    }
-    #searchInput {
-        padding: 6px 10px;
-        font-size: 12px;
-    }
-    .search-container button {
-        padding: 6px 8px !important;
-        font-size: 10px;
-        border-radius: 10px;
-    }
-    .controls {
-        padding: 10px !important;
-        gap: 10px !important;
-    }
-    .queue-container {
-        padding: 10px;
-        border-radius: 18px;
-    }
-    .queue-container h3 {
-        font-size: 13px;
-    }
-    .queue-list li {
-        padding: 8px;
-        gap: 8px;
-    }
-    .song-thumb {
-        width: 42px;
-        height: 32px;
-    }
-    .song-title {
-        font-size: 11px;
-    }
-    .song-meta {
-        font-size: 9px;
-    }
-    .button-row {
-        gap: 6px !important;
-    }
-    .button-row button {
-        width: calc(var(--mobile-button-size, 44px) - 10px) !important;
-        height: calc(var(--mobile-button-size, 44px) - 10px) !important;
-    }
-    .button-row button .icon {
-        font-size: calc(var(--mobile-icon-size, 18px) - 4px) !important;
-    }
-    button.mic-status {
-        top: 6px;
-        right: 6px;
-        font-size: 7px;
-        padding: 4px 8px;
-    }
-    .live-score-badge {
-        top: 6px;
-        left: 6px;
-        padding: 4px 8px;
-        border-radius: 8px;
-        font-size: 9px;
-    }
-    .live-score-badge .value {
-        font-size: 12px;
-    }
-    .score-bar-bg {
-        width: 26px;
-        height: 2px;
-    }
-    .score-number {
-        font-size: 48px !important;
-    }
-    .score-message {
-        font-size: 10px !important;
-    }
-    .score-actions button {
-        padding: 6px 10px !important;
-        font-size: 9px !important;
-        border-radius: 10px !important;
-    }
+/* 6. Micro Handsets (Galaxy Fold, Small Displays < 280px) */
+@media (max-width: 280px) {
+    :root { --mobile-button-size: 32px; }
+    .button-row { gap: 6px !important; }
+    .score-actions { flex-direction: column; width: 100%; gap: 6px; }
+    .score-actions button { width: 100%; }
+    .live-score-badge .value { font-size: 14px; }
 }
