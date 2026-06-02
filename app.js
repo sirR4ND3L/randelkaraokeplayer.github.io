@@ -62,7 +62,7 @@ const KaraokeApp = {
             'finalRank', 'finalMessage', 'micPulseIndicator', 'codeSearchInput',
             'textsearchContainer', 'codeSearchContainer', 'toggleSearchBtn',
             'textPlayBtn', 'textReserveBtn', 'codePlayBtn', 'codeReserveBtn',
-            'alertTitle', 'alertMessage', 'customAlert'
+            'alertTitle', 'alertMessage', 'customAlert', 'qrModal', 'qrcode'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
     },
@@ -607,10 +607,38 @@ const KaraokeApp = {
 
     // --- 10. Event Listeners & UI Helpers ---
     // Logic for keyboard shortcuts and responsive layout adjustments.
+    showSongbookQR() {
+        const modal = this.elements.qrModal;
+        const qrContainer = this.elements.qrcode;
+        if (!modal || !qrContainer) return;
+
+        qrContainer.innerHTML = "";
+
+        new QRCode(qrContainer, {
+            text: "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/songbook.html",
+            width: 200,
+            height: 200
+        });
+
+        modal.style.display = "flex";
+    },
+
+    closeSongbookQR() {
+        this.elements.qrModal.style.display = "none";
+    },
+
+    openSongBook() {
+        window.open('songbook.html', '_blank', 'width=800,height=600');
+    },
+
     showCustomAlert(message, title = "System Alert!") {
         this.elements.alertTitle.innerText = title;
         this.elements.alertMessage.innerText = message;
         this.elements.customAlert.style.display = 'flex';
+
+        // Auto-focus the OK button so the Enter key works naturally for accessibility
+        const okBtn = this.elements.customAlert.querySelector('button');
+        if (okBtn) okBtn.focus();
     },
 
     closeCustomAlert() {
@@ -643,6 +671,24 @@ const KaraokeApp = {
 
     // Maps physical keys (Z, X, C, B, F) to app actions.
     handleGlobalKeyDown(event) {
+        // Priority: If the QR modal is active, Enter or Escape closes it
+        if (this.elements.qrModal && this.elements.qrModal.style.display === 'flex') {
+            if (event.key === 'Enter' || event.key === 'Escape') {
+                this.closeSongbookQR();
+                event.preventDefault();
+            }
+            return;
+        }
+
+        // Priority: If the custom alert is active, Enter closes it
+        if (this.elements.customAlert && this.elements.customAlert.style.display === 'flex') {
+            if (event.key === 'Enter') {
+                this.closeCustomAlert();
+                event.preventDefault(); // Stop Enter from triggering search underneath
+            }
+            return; // Block other shortcuts while alert is active
+        }
+
         if (document.activeElement === this.elements.searchInput || document.activeElement === this.elements.codeSearchInput) {
             if (event.key === 'Enter') {
                 if (document.activeElement === this.elements.searchInput) {
@@ -716,6 +762,9 @@ window.closeScore = () => KaraokeApp.closeScore();
 window.playByCode = (id) => KaraokeApp.playByCode(id);
 window.toggleSearchMode = () => KaraokeApp.toggleSearchMode();
 window.closeCustomAlert = () => KaraokeApp.closeCustomAlert();
+window.openSongBook = () => KaraokeApp.openSongBook();
+window.showSongbookQR = () => KaraokeApp.showSongbookQR();
+window.closeSongbookQR = () => KaraokeApp.closeSongbookQR();
 
 // --- 12. App Launch ---
 // Self-executing initialization on DOM load.

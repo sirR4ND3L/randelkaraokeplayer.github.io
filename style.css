@@ -47,7 +47,7 @@ body {
     justify-content: center;
     align-items: center;
     z-index: 5000;
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(10px);
 }
 
 .modal-content {
@@ -73,10 +73,10 @@ body {
 }
 
 #alertMessage {
-    font-size: 16px;
+    font-size: clamp(16px, 4vw, 20px);
     font-family: Arial, sans-serif;
-    font-weight: 500;
-    color: var(--text-secondary);
+    font-weight: 800;
+    color: var(--text-primary);
 }
 
 #closeAlert {
@@ -471,6 +471,92 @@ button.mic-status.active {
     box-shadow: 0 0 25px rgba(0, 122, 255, 0.1), 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
+/* Layout for volume and songbook row */
+.bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    flex-wrap: wrap;
+}
+
+/* Songbook UI Section */
+.songbook-button-container {
+    display: flex;
+    justify-content: center;
+    z-index: 10;
+}
+
+.songbook-button {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+
+/* Songbook QR Modal Styling */
+.songbook-qr-modal {
+    background: rgba(0, 0, 0, 0.75) !important; /* Slightly more transparent for glass effect */
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+}
+
+.songbook-qr-modal h3 {
+    font-size: clamp(20px, 5vw, 24px);
+    margin-bottom: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+#qrcode {
+    background: white;
+    padding: 20px;
+    border-radius: 24px;
+    margin-bottom: 30px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#qrcode img, #qrcode canvas {
+    display: block;
+}
+
+.songbook-qr-modal button {
+    font-weight: 600;
+    min-width: 120px;
+    padding: 12px 30px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.songbook-button button {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 100px;
+    transition: var(--transition-smooth);
+    cursor: pointer;
+}
+
+#songbookButton { background: var(--accent-color); box-shadow: 0 8px 20px rgba(0, 122, 255, 0.3); }
+#songbookButton:hover { box-shadow: 0 8px 20px rgba(0, 122, 255, 0.8); }
+
+#showSongbookQR { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 20px rgba(255, 255, 255, 0.1); }
+#showSongbookQR:hover { background: rgba(255, 255, 255, 0.15); box-shadow: 0 8px 20px rgba(255, 255, 255, 0.4); }
+
 #searchInput,#codeSearchInput {
     flex: 1;
     padding: 12px 30px;
@@ -516,8 +602,8 @@ input[type="number"]::-webkit-outer-spin-button {
 
 
 .controls {
-    margin-top: 24px;
-    padding: 32px;
+    margin-top: 10px;
+    padding: 20px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -557,7 +643,6 @@ input[type="number"]::-webkit-outer-spin-button {
     background: rgba(255, 255, 255, 0.08);
     padding: 10px 20px;
     border-radius: 20px;
-    margin-top: 10px;
 }
 
 input[type=range] {
@@ -1077,6 +1162,20 @@ button.cancel-btn:hover {
         font-size: 13px;
         border-radius: 16px;
         justify-content: center;
+    }
+    
+    .bottom-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .songbook-button {
+        width: 100%;
+        max-width: 400px;
+    }
+    .songbook-button button {
+        flex: 1;
+        font-size: 12px;
     }
     
     #toggleSearchBtn {

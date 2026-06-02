@@ -25,7 +25,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="style.css">
-    
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -50,7 +50,15 @@
             <button id="closeAlert" onclick="closeCustomAlert()">OK</button>
         </div>
     </div>
-    
+
+    <div id="qrModal" class="songbook-qr-modal modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Scan for Songbook</h3>
+            <div id="qrcode"></div>
+            <button class="cancel-btn" onclick="closeSongbookQR()" aria-label="Close QR Modal">Close</button>
+        </div>
+    </div>
+
     <div class="bg-blobs">
         <div class="blob"></div>
         <div class="blob"></div>
@@ -69,7 +77,7 @@
         </div>
     </div>
 
-    <div style="text-align: center; margin-bottom: 20px; padding: 0 20px; max-width: 600px; z-index: 10; position: relative;">
+    <div style="text-align: center; margin-bottom: 10px; padding: 0 20px; max-width: 600px; z-index: 10; position: relative;">
         <p style="color: var(--text-secondary); font-size: 16px; margin: 0; line-height: 1.4;">
             Search and sing karaoke instantly with YouTube songs and real-time scoring.
         </p>
@@ -90,11 +98,17 @@
             <button id="codeReserveBtn" onclick="playByCode(false)" aria-label="Reserve song to queue">Reserve</button>
         </div>
 
-        <button id="toggleSearchBtn" onclick="toggleSearchMode()">Switch to Code Search</button>
+        <div style="
+            font-size: 0.85em; 
+            color: rgba(255, 255, 255, 0.6); 
+            text-align: center;">
+            Tip: Switch to <em>Number Search</em> for faster results. 
+            Click <strong style="font-style: italic;">Open Songbook</strong> to see all the numbers!
+        </div>
+
+        <button id="toggleSearchBtn" onclick="toggleSearchMode()">Switch to Number Search</button>
     </div>
 
-
-    
     <div class="main-layout">
         <div class="left-panel">
             <div class="video-container" id="videoContainer">
@@ -138,16 +152,23 @@
                     <button onclick="toggleFullscreen()" aria-label="Toggle full screen"><span class="icon" aria-hidden="true">⛶</span> Full</button>
                 </div>
 
-                <div class="volume-control">
-                    <span aria-hidden="true">🔈</span>
-                    <label for="volumeSlider" class="sr-only">Volume control</label>
-                    <input type="range" id="volumeSlider" min="0" max="100" value="100" oninput="changeVolume(this.value)" aria-label="Volume control">
-                    <span aria-hidden="true">🔊</span>
+                <div class="bottom-row">
+                    <div class="volume-control">
+                        <span aria-hidden="true">🔈</span>
+                        <label for="volumeSlider" class="sr-only">Volume control</label>
+                        <input type="range" id="volumeSlider" min="0" max="100" value="100" oninput="changeVolume(this.value)" aria-label="Volume control">
+                        <span aria-hidden="true">🔊</span>
+                    </div>
+
+                    <div class="songbook-button-container">
+                        <div class="songbook-button" id="songbook-content">
+                            <button id="showSongbookQR" onclick="showSongbookQR()" aria-label="Show QR Code">Show QR Code</button>
+                            <button id="songbookButton" onclick="openSongBook()" aria-label="Open Songbook">Open Songbook</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-
         </div>
-
         <div class="right-panel">
             <div class="queue-container glass-panel">
                 <h3>Up Next</h3>

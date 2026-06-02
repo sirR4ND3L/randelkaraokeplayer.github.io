@@ -13,130 +13,142 @@
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #0a0a0c; /* Deep dark background */
+            background: #0a0a0c;
             color: var(--text-main);
-            padding: 40px;
+            /* Dynamic padding: smaller on phones, larger on desktop */
+            padding: clamp(10px, 5vw, 40px);
+            margin: 0;
         }
 
-        h1 { font-weight: 300; letter-spacing: -1px; text-align: center; }
+        h1 { font-weight: 300; letter-spacing: -1px; text-align: center; font-size: clamp(1.5rem, 5vw, 2.5rem); }
 
         .header-actions {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin: 20px auto 40px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             max-width: 600px;
+            margin: 0 auto 20px;
+            gap: 10px;
         }
 
-        /* Glass Search Input */
         #songFilter {
-            flex: 1;
-            margin: 0;
+            grid-column: span 2;
             background: var(--glass);
             border: 1px solid var(--glass-border);
-            padding: 12px 20px;
-            border-radius: 100px;
+            padding: 15px 20px;
+            border-radius: 50px;
             color: white;
-            backdrop-filter: blur(20px);
-            outline: none;
+            width: 100%;
+            box-sizing: border-box; /* Crucial for phone width */
+            font-size: 16px; /* Prevents auto-zoom on iOS */
         }
 
-        .print-btn {
+        button {
             background: #007AFF;
             color: white;
             border: none;
-            padding: 12px 25px;
-            border-radius: 100px;
+            padding: 12px;
+            border-radius: 50px;
             cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-            white-space: nowrap;
-            font-family: inherit;
+            font-size: 14px;
         }
-        .print-btn:hover { background: #0062cc; }
+
+        .close-btn {
+            background: #ff3b30;
+        }
 
         .songbook-wrapper {
             display: flex;
-            justify-content: space-between;
-            gap: 40px;
+            flex-direction: column; /* Stacked by default for mobile */
+            gap: 30px;
             max-width: 1200px;
             margin: 0 auto;
         }
 
         .song-table {
-            flex: 1;
-            border-collapse: collapse;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
             background: var(--glass);
             border-radius: 20px;
-            padding: 20px;
             backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
+            table-layout: fixed; /* Keeps columns from breaking on small screens */
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px 10px;
+            word-wrap: break-word;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
         }
 
         th {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+            font-size: 13px;
             text-transform: uppercase;
-            font-size: 10px;
-            letter-spacing: 1.5px;
-            color: rgba(255,255,255,0.4);
-            padding: 15px;
-            text-align: left;
+            letter-spacing: 0.5px;
         }
 
-        td {
-            padding: 12px 15px;
-            font-size: 14px;
-            font-weight: 400;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+        tr:last-child td {
+            border-bottom: none;
         }
 
-        /* Minimalist Number column */
-        td:first-child { color: #007AFF; font-variant-numeric: tabular-nums; }
+        .note {
+            font-size: 0.9em; 
+            color: rgba(255, 255, 255, 0.6); 
+            font-style: italic;
+            margin-top: 20px;
+            text-align: center;
+            margin: 20px auto;
+            max-width: 600px;
+            padding: 7px;
+            line-height: 1.5;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #p1 { margin-bottom: 10px; font-size: 12px; }
+        #p2 { margin-top: 10px; font-size: 12px; }
+        #tip { margin-bottom: 15px; font-size: 12px; font-weight: bold; }
+
+        /* Specific column control */
+        td:first-child { width: 60px; color: #007AFF; font-weight: bold; }
+
+        /* Desktop adjustment */
+        @media (min-width: 768px) {
+            .songbook-wrapper { flex-direction: row; }
+            .song-table { padding: 20px; }
+            th, td { padding: 15px 20px; }
+        }
 
         @media print {
-            body {
-                background: white !important;
-                color: black !important;
-                padding: 20px !important;
-            }
-
-            /* Hide UI elements that shouldn't be on paper */
-            .no-print, #songFilter {
-                display: none !important;
-            }
-
-            h1 {
-                margin-top: 0 !important;
-                margin-bottom: 20px !important;
-            }
-
-            /* Ensure text is black and visible */
-            .song-table, td, th {
-                color: black !important;
-                border-bottom: 1px solid #eee !important;
-            }
-
-            tr {
-                break-inside: avoid; /* Prevents a single song from splitting across pages */
-            }
-
-            /* 4. Keep your wrapper layout intact */
-            .songbook-wrapper {
-                display: flex !important;
-                flex-direction: row !important;
-                gap: 20px !important;
-                max-width: 100% !important;
-            }
+            body { background: white !important; color: black !important; padding: 0 !important; }
+            .no-print, #songFilter, .header-actions, .note { display: none !important; }
+            .songbook-wrapper { display: block !important; }
+            .song-table { background: none; border: none; overflow: visible !important; width: 100% !important; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
+            td, th { color: black !important; border-bottom: 1px solid #999 !important; padding: 8px 5px !important; }
         }
     </style>
 </head>
 <body>
     <h1>Randel Karaoke Songbook</h1>
+    <div class="note">
+        <p id="tip"><strong>Tip:</strong> Use these song numbers in 'Number Search' on the main page for faster results!</p>
+        <p id="p1"><strong>Note:</strong> If the song you're looking for isn't listed here, it might not be in the songbook yet.</p>
+        <p id="p2">Try searching by <em>Title + Artist</em>, or use the <strong>Karaoke App search bar</strong> directly to play your song!</p>
+    </div>
     
     <div class="header-actions no-print">
         <input type="text" id="songFilter" onkeyup="filterSongs()" placeholder="Search title or artist...">
         <button class="print-btn" onclick="printSongbook()">Print Songbook</button>
+        <button class="close-btn" onclick="window.close()">Close Songbook</button>
     </div>
+
+    
 
     <div class="songbook-wrapper">
         <table class="song-table">
@@ -156,9 +168,14 @@
         </table>
     </div>
 
+    
+
+
     <script>
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18';
         const SUPABASE_URL = 'https://blbwxnbbdsqkxbuvcrtn.supabase.co';
+
+        let allSongsData = []; // Cache to allow re-rendering on window resize
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             
@@ -184,21 +201,34 @@
                 };
             });
 
-            // Pass to the split-render function
-            renderSongbook(formattedSongs);
+            allSongsData = formattedSongs;
+            renderSongbook();
         }
         
-        function renderSongbook(songs) {
-            const half = Math.ceil(songs.length / 2);
-            const leftHalf = songs.slice(0, half);
-            const rightHalf = songs.slice(half);
+        function renderSongbook() {
+            if (!allSongsData.length) return;
+
+            const leftTableBody = document.getElementById('leftTableBody');
+            const rightTableBody = document.getElementById('rightTableBody');
+            const secondTable = rightTableBody.closest('.song-table');
+            
+            const isMobile = window.innerWidth < 768;
 
             const renderRows = (data) => data.map(song => 
                 `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
             ).join('');
 
-            document.getElementById('leftTableBody').innerHTML = renderRows(leftHalf);
-            document.getElementById('rightTableBody').innerHTML = renderRows(rightHalf);
+            if (isMobile) {
+                // Render everything in one table for mobile
+                leftTableBody.innerHTML = renderRows(allSongsData);
+                secondTable.style.display = 'none';
+            } else {
+                // Split into two tables for desktop
+                const half = Math.ceil(allSongsData.length / 2);
+                leftTableBody.innerHTML = renderRows(allSongsData.slice(0, half));
+                rightTableBody.innerHTML = renderRows(allSongsData.slice(half));
+                secondTable.style.display = 'table';
+            }
         }
 
         function filterSongs() {
@@ -228,6 +258,28 @@
             }, 200);
         }
         
+        // Global print preparation to ensure only one table and one header are used per page.
+        // This prevents the "double header" issue when the first table ends at the top of a page.
+        window.onbeforeprint = () => {
+            const filter = document.getElementById('songFilter').value.toUpperCase();
+            const leftTableBody = document.getElementById('leftTableBody');
+            const rightTableBody = document.getElementById('rightTableBody');
+            const secondTable = rightTableBody.closest('.song-table');
+            
+            const filteredData = allSongsData.filter(song => 
+                (song.id + ' ' + song.title + ' ' + song.artist).toUpperCase().includes(filter)
+            );
+
+            leftTableBody.innerHTML = filteredData.map(song => 
+                `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
+            ).join('');
+            secondTable.style.display = 'none';
+        };
+
+        // Handle orientation changes or resizing
+        window.addEventListener('resize', renderSongbook);
+        window.addEventListener('afterprint', renderSongbook);
+
         loadSongbook();
     </script>
 </body>
