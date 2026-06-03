@@ -7,6 +7,7 @@ const KaraokeApp = {
     // --- 1. Configuration & Constants ---
     // Stores API keys, endpoints, and asset paths used throughout the app.
     CONFIG: {
+        APP_TITLE: "Randel Karaoke Player",
         YOUTUBE_API_KEY: "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI",
         CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
         INVIDIOUS_INSTANCES: [
@@ -301,10 +302,12 @@ const KaraokeApp = {
             nowPlaying.innerText = "🎵 " + title;
             playerPlaceholder.classList.add('hidden');
             dynamicIsland.classList.add('active');
+            document.title = `🎤 Now Playing: ${title}`;
         } else {
             nowPlaying.innerText = "Ready to Sing";
             playerPlaceholder.classList.remove('hidden');
             dynamicIsland.classList.remove('active');
+            document.title = this.CONFIG.APP_TITLE;
         }
     },
 

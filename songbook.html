@@ -59,10 +59,11 @@
 
         .songbook-wrapper {
             display: flex;
-            flex-direction: column; /* Stacked by default for mobile */
+            flex-flow: row wrap;
             gap: 20px;
             max-width: 1300px;
             margin: 0 auto;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .song-table {
@@ -75,6 +76,7 @@
             border: 1px solid var(--glass-border);
             table-layout: fixed;
             overflow: hidden;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         th, td {
@@ -129,11 +131,22 @@
         /* Desktop Two-Column Layout */
         @media (min-width: 1025px) {
             .songbook-wrapper { 
-                flex-direction: row; 
                 gap: 30px; 
                 align-items: flex-start;
             }
-            .song-table { flex: 1; }
+            .song-table { 
+                width: calc(50% - 15px); 
+            }
+        }
+
+        .hidden-table {
+            opacity: 0;
+            width: 0 !important;
+            flex: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            pointer-events: none;
+            border: none !important;
         }
 
         @media print {
@@ -217,14 +230,14 @@
             allSongsData = formattedSongs;
             renderSongbook();
         }
-        
+
         function renderSongbook() {
             if (!allSongsData.length) return;
 
             const leftTableBody = document.getElementById('leftTableBody');
             const rightTableBody = document.getElementById('rightTableBody');
             const secondTable = rightTableBody.closest('.song-table');
-            
+
             // Matches the CSS 1025px breakpoint for layout consistency
             const isMobile = window.innerWidth <= 1024;
 
@@ -235,20 +248,21 @@
             if (isMobile) {
                 // Render everything in one table for mobile
                 leftTableBody.innerHTML = renderRows(allSongsData);
-                secondTable.style.display = 'none';
+                rightTableBody.innerHTML = '';
+                secondTable.classList.add('hidden-table');
             } else {
                 // Split into two tables for desktop
                 const half = Math.ceil(allSongsData.length / 2);
                 leftTableBody.innerHTML = renderRows(allSongsData.slice(0, half));
                 rightTableBody.innerHTML = renderRows(allSongsData.slice(half));
-                secondTable.style.display = 'table';
+                secondTable.classList.remove('hidden-table');
             }
         }
 
         function filterSongs() {
             const filter = document.getElementById('songFilter').value.toUpperCase();
             const rows = document.querySelectorAll('.song-table tbody tr');
-            
+
             rows.forEach(row => {
                 const text = row.innerText.toUpperCase();
                 row.style.display = text.indexOf(filter) > -1 ? "" : "none";
@@ -271,7 +285,7 @@
                 window.print();
             }, 200);
         }
-        
+
         // Global print preparation to ensure only one table and one header are used per page.
         // This prevents the "double header" issue when the first table ends at the top of a page.
         window.onbeforeprint = () => {
@@ -279,7 +293,7 @@
             const leftTableBody = document.getElementById('leftTableBody');
             const rightTableBody = document.getElementById('rightTableBody');
             const secondTable = rightTableBody.closest('.song-table');
-            
+
             const filteredData = allSongsData.filter(song => 
                 (song.id + ' ' + song.title + ' ' + song.artist).toUpperCase().includes(filter)
             );
