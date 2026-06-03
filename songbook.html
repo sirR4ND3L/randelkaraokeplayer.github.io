@@ -20,20 +20,19 @@
             margin: 0;
         }
 
-        h1 { font-weight: 300; letter-spacing: -1px; text-align: center; font-size: clamp(1.5rem, 5vw, 2.5rem); }
+        h1 { font-weight: 400; letter-spacing: -1px; text-align: center; font-size: clamp(1.8rem, 6vw, 2.8rem); margin-bottom: 10px; }
 
         .header-actions {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            max-width: 800px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            max-width: 900px;
             margin: 0 auto 20px;
-            gap: 12px;
+            gap: 10px;
             padding: 0 10px;
         }
 
         #songFilter {
-            flex: 1 1 100%;
+            grid-column: span 2;
             background: var(--glass);
             border: 1px solid var(--glass-border);
             padding: 15px 20px;
@@ -45,7 +44,6 @@
         }
 
         button {
-            flex: 1 1 calc(50% - 6px);
             background: #007AFF;
             color: white;
             border: none;
@@ -62,8 +60,8 @@
         .songbook-wrapper {
             display: flex;
             flex-direction: column; /* Stacked by default for mobile */
-            gap: 30px;
-            max-width: 1200px;
+            gap: 20px;
+            max-width: 1300px;
             margin: 0 auto;
         }
 
@@ -118,42 +116,24 @@
         #tip { margin-bottom: 15px; font-weight: bold; }
 
         /* Specific column control */
-        th:nth-child(1), td:nth-child(1) { width: 50px; color: #007AFF; font-weight: bold; }
+        th:nth-child(1), td:nth-child(1) { width: 4rem; color: #007AFF; font-weight: bold; }
         th:nth-child(2), td:nth-child(2) { width: auto; text-align: left; }
-        th:nth-child(3), td:nth-child(3) { width: 35%; text-align: left; color: rgba(255, 255, 255, 0.7); }
+        th:nth-child(3), td:nth-child(3) { width: 30%; text-align: left; color: rgba(255, 255, 255, 0.7); }
 
         /* Screen-specific Adjustments */
-        @media (max-width: 600px) {
-            body { padding: 15px 10px; }
-            .header-actions button { 
-                padding: 14px 8px; 
-                font-size: 13px;
-            }
-            .note { font-size: 10px; }
-            th, td { font-size: 10px; }
-            th:nth-child(3), td:nth-child(3) { width: 30%; }
+        @media (max-width: 1024px) {
+            th, td { font-size: 0.85rem; padding: 10px 8px; }
+            .note { font-size: 11px; margin: 15px 10px; }
         }
 
-        @media (max-width: 480px) {
-            body { padding: 10px; }
-            .header-actions button { 
-                padding: 12px 10px; 
-                font-size: 12px;
+        /* Desktop Two-Column Layout */
+        @media (min-width: 1025px) {
+            .songbook-wrapper { 
+                flex-direction: row; 
+                gap: 30px; 
+                align-items: flex-start;
             }
-            .note { font-size: 8px; }
-            th, td { font-size: 10px; }
-            th:nth-child(3), td:nth-child(3) { width: 30%; }
-        }
-
-        @media (min-width: 768px) {
-            .songbook-wrapper { flex-direction: row; }
-            .song-table { padding: 20px; }
-        }
-
-        @media (min-width: 1200px) {
-            .songbook-wrapper {
-                gap: 40px;
-            }
+            .song-table { flex: 1; }
         }
 
         @media print {
@@ -245,7 +225,8 @@
             const rightTableBody = document.getElementById('rightTableBody');
             const secondTable = rightTableBody.closest('.song-table');
             
-            const isMobile = window.innerWidth < 768;
+            // Matches the CSS 1025px breakpoint for layout consistency
+            const isMobile = window.innerWidth <= 1024;
 
             const renderRows = (data) => data.map(song => 
                 `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
