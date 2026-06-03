@@ -284,14 +284,22 @@ const KaraokeApp = {
     handleFoundVideo(id, playNow, title, thumbnail = null) {
         const song = { id, title: title || `Video: ${id}`, thumbnail: thumbnail || `https://img.youtube.com/vi/${id}/mqdefault.jpg` };
 
-        if (playNow) {
+        // Security check: Prevent interrupting an active performance.
+        const playerState = this.state.player && typeof this.state.player.getPlayerState === 'function' ? 
+                           this.state.player.getPlayerState() : -1;
+        const isSongActive = playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING;
+
+        if (playNow && !isSongActive) {
             this.resetScore();
             this.state.player.loadVideoById(id);
             this.updateNowPlayingUI(song.title);
         } else {
+            // Security: If 'Play Now' is clicked while active, or if 'Reserve' is clicked,
+            // the song is added to the end of the queue to avoid interrupting the performance.
             this.state.songQueue.push(song);
             this.updateQueueUI();
-            const playerState = this.state.player.getPlayerState();
+            
+            // Auto-trigger playback if the player is currently idle/cued
             if (playerState === YT.PlayerState.ENDED || playerState === -1 || playerState === YT.PlayerState.CUED) {
                 this.playNextInQueue();
             }
