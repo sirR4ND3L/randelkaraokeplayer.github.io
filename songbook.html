@@ -23,15 +23,17 @@
         h1 { font-weight: 300; letter-spacing: -1px; text-align: center; font-size: clamp(1.5rem, 5vw, 2.5rem); }
 
         .header-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            max-width: 600px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 800px;
             margin: 0 auto 20px;
-            gap: 10px;
+            gap: 12px;
+            padding: 0 10px;
         }
 
         #songFilter {
-            grid-column: span 2;
+            flex: 1 1 100%;
             background: var(--glass);
             border: 1px solid var(--glass-border);
             padding: 15px 20px;
@@ -43,11 +45,12 @@
         }
 
         button {
+            flex: 1 1 calc(50% - 6px);
             background: #007AFF;
             color: white;
             border: none;
-            padding: 12px;
-            border-radius: 50px;
+            padding: 14px 20px;
+            border-radius: 16px;
             cursor: pointer;
             font-size: 14px;
         }
@@ -72,14 +75,14 @@
             border-radius: 20px;
             backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
-            table-layout: fixed; /* Keeps columns from breaking on small screens */
+            table-layout: fixed;
             overflow: hidden;
         }
 
         th, td {
-            padding: 12px 10px;
+            padding: clamp(8px, 2vw, 15px);
             word-wrap: break-word;
-            text-align: left;
+            text-align: center;
             border-bottom: 1px solid var(--glass-border);
         }
 
@@ -101,6 +104,7 @@
             font-style: italic;
             margin-top: 20px;
             text-align: center;
+            font-size: 12px;
             margin: 20px auto;
             max-width: 600px;
             padding: 7px;
@@ -109,18 +113,47 @@
             border-radius: 12px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        #p1 { margin-bottom: 10px; font-size: 12px; }
-        #p2 { margin-top: 10px; font-size: 12px; }
-        #tip { margin-bottom: 15px; font-size: 12px; font-weight: bold; }
+        #p1 { margin-bottom: 10px; }
+        #p2 { margin-top: 10px; }
+        #tip { margin-bottom: 15px; font-weight: bold; }
 
         /* Specific column control */
-        td:first-child { width: 60px; color: #007AFF; font-weight: bold; }
+        th:nth-child(1), td:nth-child(1) { width: 50px; color: #007AFF; font-weight: bold; }
+        th:nth-child(2), td:nth-child(2) { width: auto; text-align: left; }
+        th:nth-child(3), td:nth-child(3) { width: 35%; text-align: left; color: rgba(255, 255, 255, 0.7); }
 
-        /* Desktop adjustment */
+        /* Screen-specific Adjustments */
+        @media (max-width: 600px) {
+            body { padding: 15px 10px; }
+            .header-actions button { 
+                padding: 14px 8px; 
+                font-size: 13px;
+            }
+            .note { font-size: 10px; }
+            th, td { font-size: 10px; }
+            th:nth-child(3), td:nth-child(3) { width: 30%; }
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 10px; }
+            .header-actions button { 
+                padding: 12px 10px; 
+                font-size: 12px;
+            }
+            .note { font-size: 8px; }
+            th, td { font-size: 10px; }
+            th:nth-child(3), td:nth-child(3) { width: 30%; }
+        }
+
         @media (min-width: 768px) {
             .songbook-wrapper { flex-direction: row; }
             .song-table { padding: 20px; }
-            th, td { padding: 15px 20px; }
+        }
+
+        @media (min-width: 1200px) {
+            .songbook-wrapper {
+                gap: 40px;
+            }
         }
 
         @media print {
