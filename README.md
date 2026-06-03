@@ -1,4 +1,4 @@
-# 🎤 Randel Karaoke Player - Next-Gen Karaoke Experience
+# 🎤 Karaoke Pro - Next-Gen Glass Experience
 
 A premium, modern web-based Karaoke player designed with a sleek **Glassmorphism** aesthetic and an **Apple-style Dynamic Island** interface. Built for a seamless "Karaoke Box" experience directly in your browser.
 
