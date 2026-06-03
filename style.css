@@ -257,6 +257,14 @@ button.primary:hover {
     box-shadow: 0 12px 25px rgba(0, 122, 255, 0.5);
 }
 
+button.success-state {
+    background: #4cd964 !important;
+    border-color: #4cd964 !important;
+    box-shadow: 0 0 20px rgba(76, 217, 100, 0.5) !important;
+    color: white !important;
+    font-weight: 600 !important;
+}
+
 /* Layout */
 .main-layout {
     display: flex;

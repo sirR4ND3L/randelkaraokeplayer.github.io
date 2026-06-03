@@ -108,23 +108,25 @@ const KaraokeApp = {
     // Processes user input, checks the local cache, and falls back to YouTube/Invidious APIs.
 
     async handleSearch(playNow = true) {
+        if (this.state.isScoreRevealed) return;
         const query = this.elements.searchInput.value.trim();
         if (!query) return;
 
-        console.log("🔍 Raw Input:", query);
+        const searchBtn = playNow ? this.elements.textPlayBtn : this.elements.textReserveBtn;
+        const originalText = searchBtn.innerText;
+        const successText = playNow ? "Done ✓" : "Reserved ✓";
 
         // Handle Direct Links
         const directId = this.extractVideoId(query);
         if (directId) {
             this.elements.searchInput.value = "";
             this.handleFoundVideo(directId, playNow, "Direct Link / ID: " + directId);
+            this.showSearchFeedback(searchBtn, successText, originalText);
             return;
         }
 
-        const searchBtn = playNow ? this.elements.textPlayBtn : this.elements.textReserveBtn;
-        const originalText = searchBtn.innerText;
-
         this.setSearchLoading(true, searchBtn, originalText, this.elements.textsearchContainer);
+        let isSuccess = false;
 
         try {
             let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
@@ -151,6 +153,7 @@ const KaraokeApp = {
             if (result) {
                 this.elements.searchInput.value = "";
                 this.handleFoundVideo(result.id, playNow, result.title);
+                isSuccess = true;
             } else {
                 this.showCustomAlert("Song not found!");
             }
@@ -158,43 +161,57 @@ const KaraokeApp = {
             console.error("Search error:", err);
         } finally {
             this.setSearchLoading(false, searchBtn, originalText, this.elements.textsearchContainer);
+            if (isSuccess) this.showSearchFeedback(searchBtn, successText, originalText);
         }
     },
 
     // --- New Search by ID function ---
     async playByCode(playNow = true) {
+        if (this.state.isScoreRevealed) return;
         const input = this.elements.codeSearchInput;
         const id = input.value.trim();
 
         if (!id) return;
         
-        console.log(`🔢 Looking up song code: ${id}`);
-
         const searchBtn = playNow ? this.elements.codePlayBtn : this.elements.codeReserveBtn;
         const originalText = searchBtn.innerText;
+        const successText = playNow ? "Done ✓" : "Reserved ✓";
+
+        console.log(`🔢 Looking up song code: ${id}`);
 
         this.setSearchLoading(true, searchBtn, originalText, this.elements.codeSearchContainer);
+        let isSuccess = false;
 
         try {
             // Fetching from your backend using the ID parameter
             const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(id)}`);
+
+            // Explicit check for 404 Not Found or 204 No Content
+            if (res.status === 404 || res.status === 204) {
+                this.showCustomAlert(`Song number ${id} is not listed in the songbook.`, "Song Not Found");
+                console.log("❌ Song number is not listed in the songbook.");
+                return;
+            }
+
+            if (!res.ok) throw new Error("❌ Database connection error");
+
             const data = await res.json();
             
-            input.value = "";
-
             if (data && data.videoId) {
+                input.value = "";
                 console.log(`✅ Found song: (Number: ${id}) (Title: ${data.videoTitle}) (ID: ${data.videoId})`);
                 this.handleFoundVideo(data.videoId, playNow, data.videoTitle);
-                this.elements.codeSearchInput.value = "";
+                isSuccess = true;
                 console.log("🎉 Successfully added song using number!");
             } else {
-                this.showCustomAlert("Song code not found!");
+                this.showCustomAlert("Song number not found!");
             }
         } catch (err) {
-            console.error("Code lookup error:", err);
+            console.error("Number lookup error:", err);
             this.showCustomAlert("Error connecting to database.");
         } finally {
             this.setSearchLoading(false, searchBtn, originalText, this.elements.codeSearchContainer);
+            if (isSuccess) this.showSearchFeedback(searchBtn, successText, originalText);
         }
     },
 
@@ -478,6 +495,10 @@ const KaraokeApp = {
         scoreOverlay.classList.add('active');
         this.playScoreSound(rankData.rank);
         this.startFinalScoreTimer();
+
+        // Security: Disable search controls while score is revealed
+        [this.elements.textPlayBtn, this.elements.textReserveBtn, this.elements.codePlayBtn, this.elements.codeReserveBtn]
+            .forEach(btn => { if (btn) btn.disabled = true; });
     },
 
     // Determines label and color based on the numeric score.
@@ -532,6 +553,32 @@ const KaraokeApp = {
         btn.innerText = isLoading ? "Searching..." : text;
         btn.disabled = isLoading;
         if (container) container.classList.toggle('loading', isLoading);
+    },
+
+    // Provides visual confirmation of a successful song addition.
+    showSearchFeedback(btn, successText, originalText) {
+        if (!btn) return;
+        
+        // Immediately remove focus from input to "deactivate" the search bar visual state
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+
+        btn.classList.add('success-state');
+        btn.innerText = successText;
+
+        setTimeout(() => {
+            btn.classList.remove('success-state');
+            btn.innerText = originalText;
+            // Clear search inputs without resetting the UI mode
+            this.clearSearchInputs();
+        }, 2000);
+    },
+
+    // Resets search inputs in both text and number search fields.
+    clearSearchInputs() {
+        this.elements.searchInput.value = "";
+        this.elements.codeSearchInput.value = "";
     },
 
     // Starts the internal scoring interval (200ms).
@@ -595,6 +642,10 @@ const KaraokeApp = {
         this.elements.scoreOverlay.classList.remove('active');
         this.playNextInQueue();
         if (this.state.isMicActive) this.startScoring();
+
+        // Security: Re-enable search controls
+        [this.elements.textPlayBtn, this.elements.textReserveBtn, this.elements.codePlayBtn, this.elements.codeReserveBtn]
+            .forEach(btn => { if (btn) btn.disabled = false; });
     },
 
     // Sync checker to detect when the YouTube video is nearing its end.
@@ -631,7 +682,7 @@ const KaraokeApp = {
     },
 
     openSongBook() {
-        window.open('songbook.html', '_blank', 'width=800,height=600');
+        window.open('songbook.html', '_blank');
     },
 
     showCustomAlert(message, title = "System Alert!") {
@@ -659,10 +710,12 @@ const KaraokeApp = {
             textContainer.style.display = 'none';
             codeContainer.style.display = '';
             toggleBtn.innerText = "Switch to Text Search";
+            toggleBtn.classList.add('active');
         } else {
             textContainer.style.display = '';
             codeContainer.style.display = 'none';
             toggleBtn.innerText = "Switch to Number Search";
+            toggleBtn.classList.remove('active');
         }
     },
 
