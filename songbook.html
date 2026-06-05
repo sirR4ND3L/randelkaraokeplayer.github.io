@@ -150,6 +150,7 @@
         }
 
         @media print {
+            @page{ margin: 0.5in !important; size: auto !important; }
             body { background: white !important; color: black !important; padding: 0 !important; }
             .no-print, #songFilter, .header-actions, .note { display: none !important; }
             .songbook-wrapper { display: block !important; }
@@ -194,9 +195,6 @@
         </table>
     </div>
 
-    
-
-
     <script>
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18';
         const SUPABASE_URL = 'https://blbwxnbbdsqkxbuvcrtn.supabase.co';
@@ -204,7 +202,22 @@
         let allSongsData = []; // Cache to allow re-rendering on window resize
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            
+        
+        let refreshTimer;
+        supabaseClient
+            .channel('songbook-live-refresh')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'karaoke_search_cache' },
+                (payload) => {
+                    clearTimeout(refreshTimer);
+                    refreshTimer = setTimeout(() => {
+                        console.log('Change detected, updating songbook automatically...');
+                        loadSongbook();
+                    }, 500); // Debounce|Refreshes for 500ms
+                }
+            )
+            .subscribe();
+
         async function loadSongbook() {
             const { data, error } = await supabaseClient
                 .from('karaoke_search_cache')

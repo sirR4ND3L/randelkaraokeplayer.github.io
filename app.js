@@ -8,17 +8,19 @@ const KaraokeApp = {
     // Stores API keys, endpoints, and asset paths used throughout the app.
     CONFIG: {
         APP_TITLE: "Randel Karaoke Player",
-        YOUTUBE_API_KEY: "AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI",
-        CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
-        INVIDIOUS_INSTANCES: [
-            'https://invidious.nerdvpn.de/api/v1/search?q=',
-            'https://invidious.lunar.icu/api/v1/search?q='
+        YOUTUBE_API_KEY: [ 
+            'AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI'
         ],
+        CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
         SOUND_EFFECTS: {
             CHEER: "scoreSound.mp3",
             SUCCESS: "scoreSound.mp3",
             FAIL: "scoreSound.mp3"
-        }
+        },
+        PREFERRED_CHANNELS: [
+            'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
+            'UCNbFgUCJj2Ls6LVzBbL8fqA' // KARAOKETV
+        ]
     },
 
     // --- 2. Application State ---
@@ -83,7 +85,7 @@ const KaraokeApp = {
         this.state.player = new YT.Player('player', {
             height: '100%',
             width: '100%',
-            playerVars: { 'rel': 0, 'iv_load_policy': 3, 'controls': 0, 'disablekb': 1 },
+            playerVars: { 'rel': 0, 'showinfo': 0, 'iv_load_policy': 3, 'controls': 0, 'disablekb': 1 },
             events: {
                 'onReady': () => this.onPlayerReady(),
                 'onStateChange': (e) => this.onPlayerStateChange(e)
@@ -129,6 +131,7 @@ const KaraokeApp = {
         let isSuccess = false;
 
         try {
+            console.log("🔍 Raw Query:", query);
             let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
             if (!processedQuery.includes("karaoke")) processedQuery += " karaoke";
             const cleanCacheQuery = processedQuery.replace(/[^a-z0-9]/g, "");
@@ -141,7 +144,6 @@ const KaraokeApp = {
             if (!result) {
                 console.log("⚠️ Cache Miss. Moving to API Fallback.");
                 result = await this.fetchFromYouTubeAPI(processedQuery);
-                if (!result) result = await this.fetchFromInvidious(processedQuery);
                 
                 if (result) {
                     console.log("✨ Found via API:", result.id);
@@ -244,23 +246,60 @@ const KaraokeApp = {
     // Primary search fallback using the official YouTube Data API.
     async fetchFromYouTubeAPI(query) {
         if (!this.CONFIG.YOUTUBE_API_KEY) return null;
-        try {
-            const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&key=${this.CONFIG.YOUTUBE_API_KEY}`);
-            const data = await res.json();
-            return data.items?.[0] ? { id: data.items[0].id.videoId, title: data.items[0].snippet.title } : null;
-        } catch { return null; }
-    },
 
-    // Secondary search fallback using public Invidious instances.
-    async fetchFromInvidious(query) {
-        for (let baseUrl of this.CONFIG.INVIDIOUS_INSTANCES) {
+        // Helper function to check if the result title is actually relevant
+        const isRelevant = (resultTitle, originalQuery) => {
+            // 1. Decode HTML entities (like &#39; to ')
+            const doc = new DOMParser().parseFromString(resultTitle, "text/html");
+            const decodedTitle = doc.documentElement.textContent.toLowerCase();
+            
+            // 2. Clean the title and query of special characters
+            const cleanTitle = decodedTitle.replace(/[^a-z0-9\s]/g, "");
+            const cleanQuery = originalQuery.toLowerCase().replace("karaoke", "").replace(/[^a-z0-9\s]/g, "").trim();
+            
+            // 3. Split query into words and check if ALL exist in title
+            const keywords = cleanQuery.split(" ");
+            return keywords.every(word => cleanTitle.includes(word));
+        };
+
+        // 1. Preferred Channels Loop
+        for (const channelId of this.CONFIG.PREFERRED_CHANNELS) {
+            console.log('Searching in preferred channel:', channelId);
+            const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&channelId=${channelId}&key=${this.CONFIG.YOUTUBE_API_KEY}`;
+        
             try {
-                const res = await fetch(baseUrl + encodeURIComponent(query));
+                const res = await fetch(url);
                 const data = await res.json();
-                const video = data.find(item => item.videoId);
-                if (video) return { id: video.videoId, title: video.title };
-            } catch { continue; }
+                const item = data.items?.[0];
+
+                if (item) {
+                    // VALIDATION: Only return if it matches the keywords
+                    if (isRelevant(item.snippet.title, query)) {
+                        console.log(`✅ Found in preferred channel: ${channelId}`);
+                        return { id: item.id.videoId, title: item.snippet.title };
+                    } else {
+                        console.warn(`⚠️ Found video but title didn't match closely: ${item.snippet.title}`);
+                        // Continue to next channer if not relevant
+                    }
+                }
+            } catch (err) {
+                console.error(`❌Song not found in preferred channel: ${channelId}❗${err.message}`);
+            }
         }
+
+        console.log("🔍 Not in preferred channels. Searching globally...");
+        const globalUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&key=${this.CONFIG.YOUTUBE_API_KEY}`;
+
+        try {
+            const res = await fetch(globalUrl);
+            const data = await res.json();
+            const item = data.items?.[0];
+
+            if (item && isRelevant(item.snippet.title, query)) {
+                return { id: item.id.videoId, title: item.snippet.title};
+            }
+        } catch { return null; }
+
         return null;
     },
 
@@ -407,6 +446,7 @@ const KaraokeApp = {
             this.state.micBuffer = new Float32Array(this.state.micAnalyser.fftSize);
             
             this.state.isMicActive = true;
+
             audioStatus.classList.add('active');
             audioText.innerText = "Mic: On";
             [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "flex");
@@ -458,9 +498,14 @@ const KaraokeApp = {
         const energy = Math.sqrt(sum / this.state.micBuffer.length) * 100;
         const pitch = this.autoCorrelate(this.state.micBuffer, this.state.audioContext.sampleRate);
 
-        // The denominator always grows while the song plays
-        this.state.possiblePoints += 1;
+        // Prevent initial spikes by skipping all accumulation for the first 10 samples (approx 2s).
+        // This ensures initialization noise from the hardware/AudioContext doesn't leak into the score.
+        if (this.state.possiblePoints < 10) {
+            this.state.possiblePoints += 1;
+            return;
+        }
 
+        this.state.possiblePoints += 1;
         if (energy > 3.0) {
             // Increase logic: reward stable pitch and high vocal energy
             let mult = pitch > 0 ? (Math.abs(pitch - this.state.lastDetectedPitch) > 5 ? 1.3 : 0.3) : 0.4;
@@ -640,7 +685,7 @@ const KaraokeApp = {
         const sound = ['legendary', 'rockstar'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.CHEER : 
                       ['pro', 'amateur'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.SUCCESS : this.CONFIG.SOUND_EFFECTS.FAIL;
         this.state.scoreAudio = new Audio(sound);
-        this.state.scoreAudio.volume = 0.25;
+        this.state.scoreAudio.volume = 0.125;
         this.state.scoreAudio.play().catch(() => {});
     },
 
@@ -755,10 +800,16 @@ const KaraokeApp = {
 
         if (document.activeElement === this.elements.searchInput || document.activeElement === this.elements.codeSearchInput) {
             if (event.key === 'Enter') {
+                const playerState = this.state.player && typeof this.state.player.getPlayerState === 'function' ? 
+                                   this.state.player.getPlayerState() : -1;
+                const isSongActive = playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING;
+                
+                const playNow = event.shiftKey ? false : !isSongActive;
+
                 if (document.activeElement === this.elements.searchInput) {
-                    this.handleSearch(!event.shiftKey);
+                    this.handleSearch(playNow);
                 } else {
-                    this.playByCode(!event.shiftKey);
+                    this.playByCode(playNow);
                 }
             }
             return;
