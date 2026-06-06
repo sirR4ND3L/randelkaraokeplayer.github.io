@@ -145,6 +145,10 @@
             }
         }
 
+        .print-only-container {
+            display: none;
+        }
+
         .hidden-table {
             opacity: 0;
             width: 0 !important;
@@ -159,8 +163,10 @@
             @page{ margin: 0.5in !important; size: auto !important; }
             body { background: white !important; color: black !important; padding: 0 !important; }
             .no-print, #songFilter, .header-actions, .note { display: none !important; }
-            .songbook-wrapper { display: block !important; }
+            .songbook-wrapper.no-print { display: none !important; }
+            .print-only-container { display: block !important; }
             .song-table { background: none; border: none; overflow: visible !important; width: 100% !important; }
+            .print-table { display: table !important; width: 100% !important; }
             thead { display: table-header-group; }
             tr { page-break-inside: avoid; break-inside: avoid; }
             td, th { color: black !important; border-bottom: 1px solid #999 !important; padding: 8px 5px !important; }
@@ -183,7 +189,7 @@
 
     
 
-    <div class="songbook-wrapper">
+    <div class="songbook-wrapper no-print">
         <table class="song-table">
             <thead>
                 <tr><th>Number</th><th>Title</th><th>Artist</th></tr>
@@ -198,6 +204,16 @@
             </thead>
             <tbody id="rightTableBody">
                 </tbody>
+        </table>
+    </div>
+
+    <!-- Hidden container used only for a clean, single-header printout -->
+    <div class="print-only-container">
+        <table class="song-table print-table">
+            <thead>
+                <tr><th>Number</th><th>Title</th><th>Artist</th></tr>
+            </thead>
+            <tbody id="printTableBody"></tbody>
         </table>
     </div>
 
@@ -255,14 +271,19 @@
 
             const leftTableBody = document.getElementById('leftTableBody');
             const rightTableBody = document.getElementById('rightTableBody');
+            const printTableBody = document.getElementById('printTableBody');
             const secondTable = rightTableBody.closest('.song-table');
-
+            
             // Matches the CSS 1025px breakpoint for layout consistency
             const isMobile = window.innerWidth <= 1024;
 
             const renderRows = (data) => data.map(song => 
                 `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
             ).join('');
+
+            // Always populate the print-only table with the full data
+            // This ensures a single, continuous list with one header for the printer
+            printTableBody.innerHTML = renderRows(allSongsData);
 
             if (isMobile) {
                 // Render everything in one table for mobile
@@ -302,26 +323,8 @@
             // 3. Small timeout to allow the DOM to re-render before the print dialog takes over
             setTimeout(() => {
                 window.print();
-            }, 200);
+            }, 100);
         }
-
-        // Global print preparation to ensure only one table and one header are used per page.
-        // This prevents the "double header" issue when the first table ends at the top of a page.
-        window.onbeforeprint = () => {
-            const filter = document.getElementById('songFilter').value.toUpperCase();
-            const leftTableBody = document.getElementById('leftTableBody');
-            const rightTableBody = document.getElementById('rightTableBody');
-            const secondTable = rightTableBody.closest('.song-table');
-
-            const filteredData = allSongsData.filter(song => 
-                (song.id + ' ' + song.title + ' ' + song.artist).toUpperCase().includes(filter)
-            );
-
-            leftTableBody.innerHTML = filteredData.map(song => 
-                `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
-            ).join('');
-            secondTable.style.display = 'none';
-        };
 
         // Handle orientation changes or resizing
         window.addEventListener('resize', renderSongbook);

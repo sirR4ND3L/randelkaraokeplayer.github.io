@@ -1,6 +1,5 @@
 /**
- * Karaoke Pro - Next-Gen Experience
- * Refactored for Robustness and Maintainability
+ * Randel Karaoke Player - Next-Gen karaoke Experience
  */
 
 const KaraokeApp = {
