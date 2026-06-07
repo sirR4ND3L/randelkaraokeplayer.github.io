@@ -107,7 +107,7 @@ body {
     height: 70vw;
     background: var(--accent-color);
     border-radius: 50%;
-    animation: move-1 35s infinite alternate ease-in-out;
+    animation: move-1 20s infinite alternate ease-in-out;
     left: -20%;
     top: -20%;
     opacity: 0.5;
@@ -119,7 +119,7 @@ body {
     height: 60vw;
     right: -20%;
     bottom: -10%;
-    animation: move-2 45s infinite alternate ease-in-out;
+    animation: move-2 25s infinite alternate ease-in-out;
     opacity: 0.4;
 }
 
@@ -129,7 +129,7 @@ body {
     height: 50vw;
     left: 40%;
     top: -10%;
-    animation: move-3 30s infinite alternate ease-in-out;
+    animation: move-3 15s infinite alternate ease-in-out;
     opacity: 0.3;
 }
 

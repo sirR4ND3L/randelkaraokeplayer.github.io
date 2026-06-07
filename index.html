@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Randel Karaoke Player</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
     
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="ePFt2UUkXFAh6d16SjqsElduTBudJ0phfoU3h4g8a28" />
@@ -19,17 +19,18 @@
     <meta name="robots" content="index, follow">
     
     <!-- Open Graph / Facebook / Discord -->
+    <meta property="og:site_name" content="Randel Karaoke Player">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/">
     <meta property="og:title" content="Randel Karaoke Player">
     <meta property="og:description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
-    <meta property="og:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/icon.png">
+    <meta property="og:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon.png">
 
     <!-- Twitter / X Meta Tags -->
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Randel Karaoke Player">
     <meta name="twitter:description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
-    <meta name="twitter:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/icon.png">
+    <meta name="twitter:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon.png">
 
     <!-- Assets & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,12 +56,13 @@
 
 <body>
 
-    <div id="customAlert" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h3 id="alertTitle">Alert</h3>
-            <p id="alertMessage">Alert</p>
-            <button id="closeAlert" onclick="closeCustomAlert()">OK</button>
-        </div>
+    <div style="display: none;">
+        <h1>Randel Karaoke Player</h1>
+        <p>
+            Randel Karaoke Player is a next-generation, interactive, and responsive web-based karaoke system 
+            powered by YouTube. It offers real-time scoring, song queuing, and an easy-to-use search interface 
+            designed for a seamless home or event karaoke experience. 
+        </p>
     </div>
 
     <div id="qrModal" class="songbook-qr-modal modal-overlay" style="display: none;">

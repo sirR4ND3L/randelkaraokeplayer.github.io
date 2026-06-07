@@ -12,9 +12,21 @@ const KaraokeApp = {
         ],
         CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
         SOUND_EFFECTS: {
-            CHEER: "scoreSound.mp3",
-            SUCCESS: "scoreSound.mp3",
-            FAIL: "scoreSound.mp3"
+            CHEER: "soundEffects/scoreSound.mp3",
+            SUCCESS: "soundEffects/scoreSound.mp3",
+            FAIL: "soundEffects/scoreSound.mp3"
+        },
+        NUMBER_SOUND_EFFECTS: {
+            1: 'soundEffects/one.mp3',
+            2: 'soundEffects/two.mp3',
+            3: 'soundEffects/three.mp3',
+            4: 'soundEffects/four.mp3',
+            5: 'soundEffects/five.mp3',
+            6: 'soundEffects/six.mp3',
+            7: 'soundEffects/seven.mp3',
+            8: 'soundEffects/eight.mp3',
+            9: 'soundEffects/nine.mp3',
+            0: 'soundEffects/zero.mp3'
         },
         PREFERRED_CHANNELS: [
             'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
@@ -47,11 +59,24 @@ const KaraokeApp = {
 
     // --- 4. Initialization ---
     // The entry point that kicks off API loading and element caching.
-    init() {
+    async init() {
+        await this.loadGlobalComponents();
         this.cacheElements();
         this.loadYouTubeAPI();
         this.attachEventListeners();
         this.initMobileScaling();
+    },
+
+    // Fetches and injects modular UI components like the custom alert.
+    async loadGlobalComponents() {
+        try {
+            const response = await fetch('customAlert.html');
+            if (!response.ok) throw new Error('Alert component not found');
+            const html = await response.text();
+            document.body.insertAdjacentHTML('afterbegin', html);
+        } catch (err) {
+            console.warn("Global component loader:", err.message);
+        }
     },
 
     // Helper to store DOM nodes in the `elements` object.
@@ -688,6 +713,16 @@ const KaraokeApp = {
         this.state.scoreAudio.play().catch(() => {});
     },
 
+    // Plays the sound effect for a specific digit during number search.
+    playNumberSound(digit) {
+        const soundPath = this.CONFIG.NUMBER_SOUND_EFFECTS[digit];
+        if (soundPath) {
+            const audio = new Audio(soundPath);
+            audio.volume = 0.3; // Moderate volume for typing feedback
+            audio.play().catch(() => {});
+        }
+    },
+
     // Closes the score overlay and resumes the app flow.
     closeScore() {
         if (this.state.scoreAudio) this.state.scoreAudio.pause();
@@ -774,7 +809,16 @@ const KaraokeApp = {
 
     attachEventListeners() {
         document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
-        // The volume change and fullscreen toggle can be called via buttons in HTML
+
+        // Audio feedback for number search input (Voice Guide)
+        if (this.elements.codeSearchInput) {
+            this.elements.codeSearchInput.addEventListener('keydown', (e) => {
+                // Only trigger sound for numeric digits 0-9 and ignore key repeats
+                if (/^[0-9]$/.test(e.key) && !e.repeat) {
+                    this.playNumberSound(e.key);
+                }
+            });
+        }
     },
 
     // Maps physical keys (Z, X, C, B, F) to app actions.
