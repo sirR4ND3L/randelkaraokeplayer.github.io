@@ -156,7 +156,7 @@ const KaraokeApp = {
 
         try {
             console.log("🔍 Raw Query:", query);
-            let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ");
+            let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ").trim();
             if (!processedQuery.includes("karaoke")) processedQuery += " karaoke";
             const cleanCacheQuery = processedQuery.replace(/[^a-z0-9]/g, "");
             console.log("🛠️ Formatted Cache Query:", cleanCacheQuery);
@@ -269,7 +269,8 @@ const KaraokeApp = {
 
     // Primary search fallback using the official YouTube Data API.
     async fetchFromYouTubeAPI(query) {
-        if (!this.CONFIG.YOUTUBE_API_KEY) return null;
+        const apiKey = Array.isArray(this.CONFIG.YOUTUBE_API_KEY) ? this.CONFIG.YOUTUBE_API_KEY[0] : this.CONFIG.YOUTUBE_API_KEY;
+        if (!apiKey) return null;
 
         // Helper function to check if the result title is actually relevant
         const isRelevant = (resultTitle, originalQuery) => {
@@ -278,33 +279,57 @@ const KaraokeApp = {
             const decodedTitle = doc.documentElement.textContent.toLowerCase();
             
             // 2. Clean the title and query of special characters
-            const cleanTitle = decodedTitle.replace(/[^a-z0-9\s]/g, "");
-            const cleanQuery = originalQuery.toLowerCase().replace("karaoke", "").replace(/[^a-z0-9\s]/g, "").trim();
+            const cleanTitle = decodedTitle.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+            const cleanQuery = originalQuery.toLowerCase().replace(/karaoke/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
             
-            // 3. Split query into words and check if ALL exist in title
-            const keywords = cleanQuery.split(" ");
-            return keywords.every(word => cleanTitle.includes(word));
+            if (!cleanQuery) return false;
+
+            // 3. Segmented Relevance Check
+            // Karaoke titles are usually "Artist - Title (Metadata)". We split by common delimiters.
+            const segments = decodedTitle.split(/[-|()\[\]]/).map(s => 
+                s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+            ).filter(s => s.length > 0);
+
+            // 4. Match Logic: One of the segments must contain the query words.
+            const queryWords = cleanQuery.split(/\s+/).filter(word => word.length > 0);
+            const squashedQuery = cleanQuery.replace(/\s+/g, "");
+
+            return segments.some(seg => {
+                const segWords = seg.split(/\s+/).filter(word => word.length > 0);
+                const squashedSeg = seg.replace(/\s+/g, "");
+                
+                // Check 1: Exact Phrase Sequence (e.g., "bakit ngayon ka lang")
+                const isPhraseFound = segWords.some((_, i) => 
+                    queryWords.every((word, j) => segWords[i + j] === word)
+                );
+
+                // Check 2: Squashed Match (handles "kalang" vs "ka lang")
+                const isSquashedMatch = squashedSeg.includes(squashedQuery);
+
+                // Validation: Prevent over-matching (e.g., "Your Man" vs "When I Was Your Man")
+                // We allow a difference of up to 2 words to account for minor spacing differences or metadata like "Karaoke".
+                const wordCountDiff = Math.abs(segWords.length - queryWords.length);
+                const isLengthValid = wordCountDiff <= 2;
+
+                return (isPhraseFound || isSquashedMatch) && isLengthValid;
+            });
         };
 
         // 1. Preferred Channels Loop
         for (const channelId of this.CONFIG.PREFERRED_CHANNELS) {
             console.log('Searching in preferred channel:', channelId);
-            const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&channelId=${channelId}&key=${this.CONFIG.YOUTUBE_API_KEY}`;
+            const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&channelId=${channelId}&key=${apiKey}`;
         
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                const item = data.items?.[0];
+                
+                // Find the first item that actually matches our criteria
+                const item = data.items?.find(it => isRelevant(it.snippet.title, query));
 
                 if (item) {
-                    // VALIDATION: Only return if it matches the keywords
-                    if (isRelevant(item.snippet.title, query)) {
-                        console.log(`✅ Found in preferred channel: ${channelId}`);
-                        return { id: item.id.videoId, title: item.snippet.title };
-                    } else {
-                        console.warn(`⚠️ Found video but title didn't match closely: ${item.snippet.title}`);
-                        // Continue to next channer if not relevant
-                    }
+                    console.log(`✅ Found in preferred channel: ${channelId}`);
+                    return { id: item.id.videoId, title: item.snippet.title };
                 }
             } catch (err) {
                 console.error(`❌Song not found in preferred channel: ${channelId}❗${err.message}`);
@@ -312,14 +337,15 @@ const KaraokeApp = {
         }
 
         console.log("🔍 Not in preferred channels. Searching globally...");
-        const globalUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&key=${this.CONFIG.YOUTUBE_API_KEY}`;
+        const globalUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&key=${apiKey}`;
 
         try {
             const res = await fetch(globalUrl);
             const data = await res.json();
-            const item = data.items?.[0];
+            
+            const item = data.items?.find(it => isRelevant(it.snippet.title, query));
 
-            if (item && isRelevant(item.snippet.title, query)) {
+            if (item) {
                 return { id: item.id.videoId, title: item.snippet.title};
             }
         } catch { return null; }
@@ -715,6 +741,13 @@ const KaraokeApp = {
 
     // Plays the sound effect for a specific digit during number search.
     playNumberSound(digit) {
+        const player = this.state.player;
+        if (player && typeof player.getPlayerState === 'function') {
+            const state = player.getPlayerState();
+            // Disable sound effects if a song is currently playing or buffering
+            if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) return;
+        }
+
         const soundPath = this.CONFIG.NUMBER_SOUND_EFFECTS[digit];
         if (soundPath) {
             const audio = new Audio(soundPath);
