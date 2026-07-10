@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Karaoke | Songbook</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #030303;
+            --bg-secondary: #0a0a0c;
+            --glass-light: rgba(255, 255, 255, 0.08);
+            --glass-lighter: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-border-hover: rgba(255, 255, 255, 0.2);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent-color: #007aff;
+            --accent-glow: rgba(0, 122, 255, 0.3);
+            --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        body { 
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            padding: clamp(16px, 4vw, 40px);
+            margin: 0;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1 { 
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            text-align: center;
+            font-size: clamp(2rem, 7vw, 3.2rem);
+            margin: 0 0 clamp(20px, 5vw, 40px) 0;
+            background: linear-gradient(135deg, var(--text-primary) 0%, rgba(255, 255, 255, 0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions {
+            display: grid;
+            max-width: 900px;
+            margin: 0 auto clamp(20px, 5vw, 32px);
+            gap: clamp(10px, 2vw, 16px);
+            padding: 0 clamp(8px, 2vw, 20px);
+            align-items: center;
+            grid-template-columns: 1fr auto;
+        }
+
+        #songFilter {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            padding: clamp(12px, 3vw, 16px) clamp(16px, 3vw, 20px);
+            border-radius: 28px;
+            color: var(--text-primary);
+            width: 100%;
+            font-size: clamp(14px, 2vw, 16px);
+            transition: var(--transition);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        #songFilter::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        #songFilter:focus {
+            outline: none;
+            background: var(--glass-lighter);
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 0 40px var(--accent-glow);
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            color: white;
+            border: 1px solid rgba(0, 122, 255, 0.3);
+            padding: clamp(12px, 2vw, 14px) clamp(20px, 3vw, 28px);
+            border-radius: 24px;
+            cursor: pointer;
+            font-size: clamp(13px, 2vw, 15px);
+            font-weight: 600;
+            transition: var(--transition);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.25);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0, 122, 255, 0.4);
+            border-color: rgba(0, 122, 255, 0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .songbook-wrapper {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: clamp(20px, 4vw, 32px);
+            max-width: 1400px;
+            margin: 0 auto;
+            transition: var(--transition);
+        }
+
+        .song-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: var(--glass-lighter);
+            border-radius: 24px;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transition: var(--transition);
+        }
+
+        .song-table:hover {
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4), 0 0 40px var(--accent-glow);
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid var(--glass-border);
+            font-weight: 700;
+            font-size: clamp(12px, 1.5vw, 14px);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-secondary);
+            padding: clamp(14px, 2vw, 18px);
+            text-align: center;
+        }
+
+        td {
+            padding: clamp(12px, 1.5vw, 16px);
+            word-wrap: break-word;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            font-size: clamp(13px, 1.8vw, 15px);
+            transition: var(--transition);
+        }
+
+        tbody tr:hover td {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Column styling */
+        th:nth-child(1), td:nth-child(1) {
+            width: clamp(60px, 12vw, 80px);
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        th:nth-child(2), td:nth-child(2) {
+            width: auto;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        th:nth-child(3), td:nth-child(3) {
+            width: clamp(40%, 30vw, 35%);
+            text-align: left;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .note {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: clamp(16px, 3vw, 24px);
+            margin: 0 auto clamp(20px, 5vw, 32px);
+            max-width: 700px;
+            line-height: 1.7;
+            font-size: clamp(12px, 2vw, 14px);
+            color: var(--text-secondary);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        #tip {
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-bottom: clamp(8px, 2vw, 12px);
+        }
+
+        #p1 { 
+            margin-bottom: clamp(10px, 2vw, 14px);
+            margin-top: 0;
+        }
+
+        #p2 { 
+            margin-top: clamp(10px, 2vw, 14px);
+            margin-bottom: 0;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .songbook-wrapper {
+                grid-template-columns: 1fr;
+                gap: clamp(16px, 3vw, 24px);
+            }
+
+            th, td {
+                font-size: clamp(12px, 1.5vw, 14px);
+                padding: clamp(10px, 1.5vw, 14px);
+            }
+
+            .header-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: clamp(12px, 3vw, 24px);
+            }
+
+            h1 {
+                margin-bottom: clamp(16px, 4vw, 28px);
+            }
+
+            .header-actions {
+                gap: clamp(8px, 2vw, 12px);
+                padding: 0;
+            }
+
+            th:nth-child(1), td:nth-child(1) {
+                width: clamp(50px, 10vw, 70px);
+                font-size: clamp(12px, 1.5vw, 13px);
+            }
+
+            th:nth-child(3), td:nth-child(3) {
+                width: clamp(35%, 20vw, 40%);
+            }
+
+            .note {
+                padding: clamp(12px, 2vw, 18px);
+                font-size: clamp(11px, 1.8vw, 13px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: clamp(10px, 2.5vw, 16px);
+            }
+
+            h1 {
+                font-size: clamp(1.5rem, 5vw, 2.2rem);
+                margin-bottom: clamp(12px, 3vw, 20px);
+            }
+
+            .header-actions {
+                gap: clamp(6px, 1.5vw, 10px);
+                margin-bottom: clamp(12px, 3vw, 20px);
+            }
+
+            #songFilter {
+                padding: clamp(10px, 2vw, 12px) clamp(12px, 2vw, 16px);
+                font-size: 16px;
+                border-radius: 24px;
+            }
+
+            button {
+                width: 100%;
+                padding: clamp(10px, 2vw, 12px) clamp(12px, 2vw, 16px);
+            }
+
+            th {
+                padding: clamp(10px, 1.5vw, 12px);
+                font-size: 11px;
+            }
+
+            td {
+                padding: clamp(8px, 1.5vw, 11px);
+                font-size: 12px;
+            }
+
+            th:nth-child(1), td:nth-child(1) {
+                width: 45px;
+                font-size: 11px;
+            }
+
+            th:nth-child(2), td:nth-child(2) {
+                font-size: 12px;
+            }
+
+            th:nth-child(3), td:nth-child(3) {
+                width: 30%;
+                font-size: 11px;
+            }
+
+            .note {
+                padding: clamp(10px, 2vw, 14px);
+                font-size: 11px;
+                line-height: 1.6;
+            }
+        }
+
+        .print-only-container {
+            display: none;
+        }
+
+        .hidden-table {
+            opacity: 0;
+            width: 0 !important;
+            flex: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            pointer-events: none;
+            border: none !important;
+        }
+
+        /* Print Styles */
+        @media print {
+            @page {
+                margin: 0.5in;
+                size: auto;
+            }
+
+            body {
+                background: white !important;
+                color: #000 !important;
+                padding: 0.5in !important;
+            }
+
+            h1 {
+                background: none !important;
+                -webkit-text-fill-color: unset !important;
+                color: #000 !important;
+                margin-bottom: 1.5rem;
+            }
+
+            .no-print, #songFilter, .header-actions, .note {
+                display: none !important;
+            }
+
+            .songbook-wrapper.no-print {
+                display: none !important;
+            }
+
+            .print-only-container {
+                display: block !important;
+            }
+
+            .song-table {
+                background: none !important;
+                border: none !important;
+                box-shadow: none !important;
+                backdrop-filter: none !important;
+                overflow: visible !important;
+                width: 100% !important;
+                margin-bottom: 0;
+            }
+
+            .print-table {
+                display: table !important;
+                width: 100% !important;
+            }
+
+            thead {
+                display: table-header-group;
+            }
+
+            tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            td, th {
+                color: #000 !important;
+                border-bottom: 1px solid #999 !important;
+                padding: 8px 5px !important;
+                background: none !important;
+            }
+
+            th {
+                background-color: #f0f0f0 !important;
+                font-weight: 700;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Randel Karaoke Songbook</h1>
+    
+    <div class="note">
+        <p id="tip">💡 Use these song numbers in 'Number Search' on the main page for faster results!</p>
+        <p id="p1">📝 If the song you're looking for isn't listed here, it might not be in the songbook yet.</p>
+        <p id="p2">Try searching by <strong>Title + Artist</strong>, or use the <strong>Karaoke App search bar</strong> directly to play your song!</p>
+    </div>
+    
+    <div class="header-actions no-print">
+        <input type="text" id="songFilter" onkeyup="filterSongs()" placeholder="🔍 Search title or artist...">
+        <button class="print-btn" onclick="printSongbook()">🖨️ Print</button>
+    </div>
+
+    <div class="songbook-wrapper no-print">
+        <table class="song-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>Artist</th>
+                </tr>
+            </thead>
+            <tbody id="leftTableBody"></tbody>
+        </table>
+
+        <table class="song-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>Artist</th>
+                </tr>
+            </thead>
+            <tbody id="rightTableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- Hidden container used only for a clean, single-header printout -->
+    <div class="print-only-container">
+        <table class="song-table print-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>Artist</th>
+                </tr>
+            </thead>
+            <tbody id="printTableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18';
+        const SUPABASE_URL = 'https://blbwxnbbdsqkxbuvcrtn.supabase.co';
+
+        let allSongsData = []; // Cache to allow re-rendering on window resize
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let refreshTimer;
+        supabaseClient
+            .channel('songbook-live-refresh')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'karaoke_search_cache' },
+                (payload) => {
+                    clearTimeout(refreshTimer);
+                    refreshTimer = setTimeout(() => {
+                        console.log('Change detected, updating songbook automatically...');
+                        loadSongbook();
+                    }, 500); // Debounce|Refreshes for 500ms
+                }
+            )
+            .subscribe();
+
+        async function loadSongbook() {
+            const { data, error } = await supabaseClient
+                .from('karaoke_search_cache')
+                .select('id, video_title')
+                .eq('is_verified', true)
+                .order('video_title', { ascending: true });
+
+            if (error) {
+                console.error("Error loading:", error);
+                return;
+            }
+
+            // Format the data for the renderer
+            const formattedSongs = data.map(song => {
+                const parts = song.video_title.split(' - ');
+                return {
+                    id: song.id,
+                    title: parts[0],
+                    artist: parts.slice(1).join(' - ') || 'N/A'
+                };
+            });
+
+            allSongsData = formattedSongs;
+            renderSongbook();
+        }
+
+        function renderSongbook() {
+            if (!allSongsData.length) return;
+
+            const leftTableBody = document.getElementById('leftTableBody');
+            const rightTableBody = document.getElementById('rightTableBody');
+            const printTableBody = document.getElementById('printTableBody');
+            const secondTable = rightTableBody.closest('.song-table');
+            
+            // Matches the CSS 1025px breakpoint for layout consistency
+            const isMobile = window.innerWidth <= 1024;
+
+            const renderRows = (data) => data.map(song => 
+                `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
+            ).join('');
+
+            // Always populate the print-only table with the full data
+            // This ensures a single, continuous list with one header for the printer
+            printTableBody.innerHTML = renderRows(allSongsData);
+
+            if (isMobile) {
+                // Render everything in one table for mobile
+                leftTableBody.innerHTML = renderRows(allSongsData);
+                rightTableBody.innerHTML = '';
+                secondTable.classList.add('hidden-table');
+            } else {
+                // Split into two tables for desktop
+                const half = Math.ceil(allSongsData.length / 2);
+                leftTableBody.innerHTML = renderRows(allSongsData.slice(0, half));
+                rightTableBody.innerHTML = renderRows(allSongsData.slice(half));
+                secondTable.classList.remove('hidden-table');
+            }
+        }
+
+        function filterSongs() {
+            const filter = document.getElementById('songFilter').value.toUpperCase();
+            const rows = document.querySelectorAll('.song-table tbody tr');
+
+            rows.forEach(row => {
+                const text = row.innerText.toUpperCase();
+                row.style.display = text.indexOf(filter) > -1 ? "" : "none";
+            });
+        }
+
+        async function printSongbook() {
+            console.log("🖨️ Preparing songbook for print...");
+
+            // 1. Refresh data from the database to ensure the printout is up to date
+            await loadSongbook();
+
+            // 2. Clear the search filter before printing so all songs are visible
+            const filterInput = document.getElementById('songFilter');
+            filterInput.value = '';
+            filterSongs(); // Force show all rows
+
+            // 3. Small timeout to allow the DOM to re-render before the print dialog takes over
+            setTimeout(() => {
+                window.print();
+            }, 100);
+        }
+
+        // Handle orientation changes or resizing
+        window.addEventListener('resize', renderSongbook);
+        window.addEventListener('afterprint', renderSongbook);
+
+        loadSongbook();
+    </script>
+</body>
+</html>

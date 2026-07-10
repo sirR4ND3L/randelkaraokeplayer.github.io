@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Randel Karaoke Player</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="ePFt2UUkXFAh6d16SjqsElduTBudJ0phfoU3h4g8a28" />
+    <link rel="canonical" href="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/">
+    
+    <!-- Primary SEO Metadata -->
+    <meta name="title" content="Randel Karaoke Player">
+    <meta name="description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
+    <meta name="author" content="Randel Chris Castro">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph / Facebook / Discord -->
+    <meta property="og:site_name" content="Randel Karaoke Player">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/">
+    <meta property="og:title" content="Randel Karaoke Player">
+    <meta property="og:description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
+    <meta property="og:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon.png">
+
+    <!-- Twitter / X Meta Tags -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Randel Karaoke Player">
+    <meta name="twitter:description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
+    <meta name="twitter:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon.png">
+
+    <!-- Assets & Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Randel Karaoke Player",
+      "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+</head>
+
+<body>
+
+    <div style="display: none;">
+        <h1>Randel Karaoke Player</h1>
+        <p>
+            Randel Karaoke Player is a next-generation, interactive, and responsive web-based karaoke system 
+            powered by YouTube. It offers real-time scoring, song queuing, and an easy-to-use search interface 
+            designed for a seamless home or event karaoke experience. 
+        </p>
+    </div>
+
+    <div class="bg-blobs">
+        <div class="blob"></div>
+        <div class="blob"></div>
+        <div class="blob"></div>
+    </div>
+
+    <div class="header-container">
+        <div id="dynamicIsland" class="dynamic-island">
+            <h2 id="nowPlaying">Ready to Sing</h2>
+            <div class="score-meter-container" id="scoreMeter" style="display: none;">
+                <div class="score-bar-bg">
+                    <div id="scoreBarFill"></div>
+                </div>
+                <span id="liveScoreValue">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="left-panel">
+            <div class="video-container" id="videoContainer">
+                <div id="player"></div>
+                
+                <div id="liveScoreBadge" class="live-score-badge">
+                    <span class="label">Score</span>
+                    <span class="value" id="liveScorePlayer">0</span>
+                </div>
+
+                <div id="scoreOverlay" class="score-overlay">
+                    <div class="score-rank" id="finalRank">Rockstar</div>
+                    <div class="score-number" id="finalScore">85</div>
+                    <p class="score-message" id="finalMessage">Incredible performance!</p>
+                    <div class="score-actions">
+                        <button class="primary" onclick="closeScore()" aria-label="Continue to next song">Continue</button>
+                        <button onclick="restartVideo()" aria-label="Sing song again">Sing Again</button>
+                    </div>
+                </div>
+
+                <button id="audioStatus" class="mic-status" onclick="toggleVisualizer()" aria-label="Toggle Microphone Scoring">
+                    <span id="micPulseIndicator"></span>
+                    <span aria-hidden="true">🎙️</span> <span id="audioText">Mic: Off</span>
+                </button>
+
+                <div id="playerPlaceholder" class="player-placeholder">
+                    <div class="welcome-content">
+                        <div class="mic-icon" aria-hidden="true">🎙️</div>
+                        <h1 class="visible-title">Randel Karaoke Player</h1>
+                        <p style="color: var(--text-secondary)">Next Gen Karaoke Experience</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="player-control-bar glass-panel">
+                <div class="pcb-left">
+                   
+                    <div class="volume-control">
+                        <span aria-hidden="true">🔈</span>
+                        <label for="volumeSlider" class="sr-only">Volume control</label>
+                        <input type="range" id="volumeSlider" min="0" max="100" value="100" oninput="changeVolume(this.value)" aria-label="Volume control">
+                        <span aria-hidden="true">🔊</span>
+                    </div>
+                </div>
+                <div class="pcb-center">
+                     <button id="playPauseBtn" class="play-pause-btn" onclick="togglePlayPause()" aria-label="Play/Pause">
+                        <span class="icon">▶️</span> Play
+                    </button>
+                    <button onclick="restartVideo()" aria-label="Restart video"><span class="icon" aria-hidden="true">🔄</span> Restart</button>
+                    <button onclick="cancelCurrentSong()" class="cancel-btn" aria-label="Cancel current song"><span class="icon" aria-hidden="true">⏹️</span> Cancel</button>
+                    <button onclick="toggleFullscreen()" aria-label="Toggle full screen"><span class="icon" aria-hidden="true">⛶</span> Full</button>
+                </div>
+                <div class="pcb-right">
+                    <button id="openSBBtn" onclick="openSongBook()" class="primary" aria-label="Open Songbook">Open SongBook</button>
+                </div>
+            </div>
+        </div>
+        <div class="right-panel">
+            <!-- Search Section -->
+            <div class="sidebar-section search-section glass-panel">
+                <div class="search-row">
+                    <div class="search-input-wrapper">
+                        <label for="sidebarSearchInput" class="sr-only">Search karaoke song</label>
+                        <input type="text" id="sidebarSearchInput" placeholder="Search for a song..." aria-label="Search karaoke song">
+                    </div>
+                    <div class="search-mode-toggle">
+                        <button id="sidebarToggleSearchBtn" onclick="toggleSearchMode()">Number Search</button>
+                    </div>
+                </div>
+                <div class="sidebar-search-actions">
+                    <button id="sidebarPlayBtn" class="primary" onclick="sidebarSearch(true)" aria-label="Play video instantly">Play Now</button>
+                    <button id="sidebarReserveBtn" onclick="sidebarSearch(false)" aria-label="Reserve song to queue">Reserve</button>
+                </div>
+            </div>
+
+            <!-- Queue Section -->
+            <div class="sidebar-section queue-container glass-panel">
+                <h3>Up Next</h3>
+                <ul class="queue-list" id="queueList" aria-label="Song queue">
+                    <li class="empty-queue-state">(Queue is Empty)</li>
+                </ul>
+            </div>
+
+            <!-- Shortcuts Section -->
+            <div class="sidebar-section shortcuts-legend glass-panel">
+                <h4>Shortcuts</h4>
+                <div class="shortcut-grid">
+                    <div class="shortcut-item"><span class="key">Z</span> <span>Play/Pause</span></div>
+                    <div class="shortcut-item"><span class="key">C</span> <span>Restart</span></div>
+                    <div class="shortcut-item"><span class="key">B</span> <span>Cancel</span></div>
+                    <div class="shortcut-item"><span class="key">F</span> <span>Full</span></div>
+                    <div class="shortcut-item"><span class="key">↵</span> <span>Play</span></div>
+                    <div class="shortcut-item"><span class="key">⇧+↵</span> <span>Reserve</span></div>
+                    <div class="shortcut-item"><span class="key">M</span> <span>Mic</span></div>
+                </div>
+            </div>
+
+            <!-- QR Section -->
+            <div class="sidebar-section qr-section glass-panel">
+                <div class="qr-label">QR SB</div>
+                <div id="sidebarQrCode"></div>
+                <p class="qr-caption">Scan this to show Song Book</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js" defer></script>
+</body>
+</html>
