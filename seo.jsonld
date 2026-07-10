@@ -1,0 +1,26 @@
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Randel Karaoke Player",
+  "alternateName": "Randel Karaoke",
+  "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
+  "applicationCategory": "MultimediaApplication",
+  "applicationSubCategory": "Karaoke Player",
+  "operatingSystem": "All",
+  "browserRequirements": "Requires HTML5 compatible browser with JavaScript enabled.",
+  "description": "An interactive, online karaoke player built on top of the YouTube API featuring real-time pitch scoring, premium glassmorphism visuals, and an automated audio visualizer.",
+  "featureList": "YouTube integration, Real-time audio visualizer, Live pitch scoring system, Apple-inspired UI, Keyboard shortcuts control",
+  "author": {
+    "@type": "Person",
+    "name": "Randel",
+    "url": "https://github.com/sirr4nd3l"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0.00",
+    "priceCurrency": "USD"
+  },
+  "image": [
+    "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon-image.png"
+  ]
+}
