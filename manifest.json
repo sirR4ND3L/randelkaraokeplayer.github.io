@@ -1,0 +1,25 @@
+{
+  "name": "Randel Karaoke Remote",
+  "short_name": "Karaoke Remote",
+  "description": "Control the Randel Karaoke Player from your phone - search songs, play now, or reserve.",
+  "start_url": "remote.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030303",
+  "theme_color": "#030303",
+  "icons": [
+    {
+      "src": "images/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

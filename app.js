@@ -857,7 +857,7 @@ const KaraokeApp = {
         if (!container || typeof QRCode === 'undefined') return;
         container.innerHTML = '';
         new QRCode(container, {
-            text: "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/songbook.html?player=" + encodeURIComponent(this.getPlayerId()),
+            text: "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/remote.html?player=" + encodeURIComponent(this.getPlayerId()),
             width: 160,
             height: 160
         });
@@ -993,13 +993,15 @@ const KaraokeApp = {
                 },
                 async (payload) => {
                     const row = payload.new;
-                    if (!row || !row.song_code || row.status !== 'pending') return;
+                    if (!row || row.status !== 'pending') return;
 
                     try {
                         // Existing safety rules apply: e.g. gets queued instead of
                         // interrupting an active performance, guarded while score is shown
                         const playNow = row.action === 'play';
-                        const ok = await this.playSongByNumber(row.song_code, playNow);
+                        const ok = row.video_id
+                            ? this.handleRemoteVideo(row, playNow)
+                            : await this.playSongByNumber(row.song_code, playNow);
                         await client.from('remote_commands')
                             .update({ status: ok ? 'ack' : 'failed' })
                             .eq('id', row.id);
@@ -1011,6 +1013,14 @@ const KaraokeApp = {
             .subscribe((status, err) => {
                 if (err) console.warn("Remote command channel error:", err.message);
             });
+    },
+
+    // Plays a remote video_id command. Returns true if the command was accepted.
+    handleRemoteVideo(row, playNow) {
+        if (this.state.isScoreRevealed) return false;
+        if (!row.video_id) return false;
+        this.handleFoundVideo(row.video_id, playNow, row.video_title || `Video: ${row.video_id}`);
+        return true;
     },
 
     // Reads ?code=X&play=Y from the URL (opened directly from the songbook)

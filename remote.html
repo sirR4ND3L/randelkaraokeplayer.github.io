@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Karaoke Remote</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#030303">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Karaoke Remote">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #030303;
+            --bg-secondary: #0a0a0c;
+            --glass-light: rgba(255, 255, 255, 0.08);
+            --glass-lighter: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-border-hover: rgba(255, 255, 255, 0.2);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent-color: #007aff;
+            --accent-glow: rgba(0, 122, 255, 0.3);
+            --success: #30d158;
+            --danger: #ff453a;
+            --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+        html { -webkit-text-size-adjust: 100%; }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            padding: calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+            margin: 0;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .remote-header {
+            max-width: 640px;
+            margin: 0 auto clamp(18px, 5vw, 28px);
+            text-align: center;
+        }
+
+        h1 {
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            font-size: clamp(1.8rem, 7vw, 2.6rem);
+            margin: 0 0 12px 0;
+            background: linear-gradient(135deg, var(--text-primary) 0%, rgba(255, 255, 255, 0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .player-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            border-radius: 40px;
+            padding: 10px 18px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+            transition: var(--transition);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .player-pill:active { transform: scale(0.97); }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-tertiary);
+            flex-shrink: 0;
+            transition: var(--transition);
+        }
+
+        .status-dot.online { background: var(--success); box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.5); animation: pulse 1.8s ease-out infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.5); }
+            100% { box-shadow: 0 0 0 10px rgba(48, 209, 88, 0); }
+        }
+
+        .player-pill .short-no-badge { font-weight: 700; color: var(--accent-color); }
+
+        .pair-card {
+            max-width: 640px;
+            margin: 0 auto;
+            background: var(--glass-lighter);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(20px, 5vw, 32px);
+            text-align: center;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .pair-card h2 { margin: 0 0 8px; font-weight: 600; }
+        .pair-card p { color: var(--text-secondary); margin: 0 0 18px; font-size: 14px; line-height: 1.6; }
+
+        .glass-card {
+            background: var(--glass-lighter);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: clamp(18px, 5vw, 26px);
+        }
+
+        .card-label {
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin: 0 0 14px;
+        }
+
+        .remote-stack { display: grid; gap: clamp(14px, 4vw, 20px); max-width: 640px; margin: 0 auto; }
+
+        /* Quick search */
+        .search-row { display: flex; gap: 10px; }
+
+        .search-input-wrapper { flex: 1; position: relative; }
+
+        .search-input-wrapper input {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            padding: 14px 18px;
+            border-radius: 28px;
+            color: var(--text-primary);
+            width: 100%;
+            font-size: 16px;
+            transition: var(--transition);
+        }
+
+        .search-input-wrapper input::placeholder { color: var(--text-tertiary); }
+
+        .search-input-wrapper input:focus {
+            outline: none;
+            background: var(--glass-lighter);
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 0 40px var(--accent-glow);
+        }
+
+        .search-mode-toggle {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: 4px;
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .search-mode-toggle button {
+            background: transparent;
+            border: none;
+            color: var(--text-tertiary);
+            padding: 9px 16px;
+            border-radius: 22px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .search-mode-toggle button.active {
+            background: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(0, 122, 255, 0.4);
+        }
+
+        .search-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+
+        button {
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            color: white;
+            border: 1px solid rgba(0, 122, 255, 0.3);
+            padding: 13px 20px;
+            border-radius: 26px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: var(--transition);
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.25);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button:active { transform: scale(0.97); box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); }
+
+        button:disabled { opacity: 0.6; pointer-events: none; }
+
+        button.reserve {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border-hover);
+            box-shadow: none;
+        }
+
+        button.reserve:active { background: rgba(255, 255, 255, 0.18); }
+
+        button.success-state {
+            background: rgba(48, 209, 88, 0.25) !important;
+            border-color: rgba(48, 209, 88, 0.6) !important;
+            color: var(--success) !important;
+            box-shadow: none !important;
+        }
+
+        button.fail-state {
+            background: rgba(255, 69, 58, 0.22) !important;
+            border-color: rgba(255, 69, 58, 0.6) !important;
+            color: var(--danger) !important;
+            box-shadow: none !important;
+        }
+
+        .hint-text { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
+
+        /* Song list */
+        .song-filter {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            padding: 12px 16px;
+            border-radius: 26px;
+            color: var(--text-primary);
+            width: 100%;
+            font-size: 15px;
+            margin-bottom: 12px;
+            transition: var(--transition);
+        }
+
+        .song-filter::placeholder { color: var(--text-tertiary); }
+
+        .song-filter:focus {
+            outline: none;
+            background: var(--glass-lighter);
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .song-list { display: grid; gap: 8px; max-height: 52vh; overflow-y: auto; padding-right: 2px; }
+
+        .song-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .song-row:hover { border-color: var(--glass-border-hover); background: rgba(255, 255, 255, 0.1); }
+        .song-row:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.12); }
+
+        .song-row .num {
+            min-width: 52px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .song-row .meta { flex: 1; min-width: 0; }
+        .song-row .meta .title { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .song-row .meta .artist { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .empty-state { text-align: center; color: var(--text-tertiary); padding: 30px 0; font-size: 13px; }
+
+        /* Modal */
+        .song-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 5000;
+            padding: 20px;
+            animation: modalFadeIn 0.25s ease;
+        }
+
+        .song-modal {
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(24px, 6vw, 36px);
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 40px var(--accent-glow);
+            animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .song-number-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 18px;
+            padding: 8px 24px;
+            border-radius: 40px;
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.35);
+            margin-bottom: 16px;
+        }
+
+        .song-modal h2 { margin: 0 0 6px; font-size: clamp(18px, 5vw, 24px); font-weight: 600; letter-spacing: -0.3px; word-wrap: break-word; }
+        .song-modal .song-artist { margin: 0 0 24px; color: var(--text-secondary); font-size: 15px; }
+
+        .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .modal-cancel {
+            background: transparent !important;
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: none !important;
+            color: var(--text-tertiary) !important;
+            font-weight: 500 !important;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            left: 50%;
+            bottom: calc(24px + env(safe-area-inset-bottom));
+            transform: translateX(-50%);
+            z-index: 6000;
+            display: grid;
+            gap: 8px;
+            width: min(92vw, 480px);
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(20, 20, 24, 0.92);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            color: var(--text-primary);
+            border-radius: 16px;
+            padding: 14px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+            animation: toastIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            word-wrap: break-word;
+        }
+
+        .toast.success { border-color: rgba(48, 209, 88, 0.5); }
+        .toast.error { border-color: rgba(255, 69, 58, 0.5); }
+        .toast .sub { display: block; font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+
+        @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes modalSlideUp { from { opacity: 0; transform: translateY(24px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 480px) {
+            .search-actions { grid-template-columns: 1fr; }
+            .modal-actions { grid-template-columns: 1fr; }
+            .search-row { flex-direction: column; }
+            .search-mode-toggle { align-self: stretch; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <header class="remote-header">
+        <h1>Karaoke Remote</h1>
+        <div id="playerPill" class="player-pill" title="Tap to copy player ID">
+            <span id="statusDot" class="status-dot" aria-hidden="true"></span>
+            <span id="playerIdBadge" class="short-no-badge">P-No</span>
+        </div>
+    </header>
+
+    <!-- Pairing screen when opened without a player id -->
+    <section id="pairCard" class="pair-card hidden">
+        <h2>Not paired with a player</h2>
+        <p>Scan the QR code on the Karaoke Player screen, or paste a Player ID below (tap the <b>P-XXXXXX</b> badge on the player to copy it).</p>
+        <div style="display:flex; gap:10px; max-width:420px; margin:0 auto 14px;">
+            <input id="pairingId" class="song-filter" type="text" placeholder="Paste player ID (rk_player_...)" style="margin:0;" autocomplete="off">
+        </div>
+        <div class="search-actions">
+            <button onclick="tryPair()">Pair</button>
+        </div>
+        <p class="hint-text" style="text-align:center;">Tip: open the player tab and click its <b>P-XXXXXX</b> badge to copy the full ID.</p>
+    </section>
+
+    <div id="remoteApp" class="remote-stack hidden">
+        <!-- Quick Search -->
+        <section class="glass-card">
+            <p class="card-label">Quick Search</p>
+            <div class="search-row">
+                <div class="search-input-wrapper">
+                    <input type="text" id="quickSearchInput" placeholder="Title, artist, or YouTube link..." autocomplete="off" aria-label="Quick song search">
+                </div>
+                <div class="search-mode-toggle" role="tablist" aria-label="Search mode">
+                    <button id="textModeBtn" class="active" onclick="setMode('text')">Text</button>
+                    <button id="numberModeBtn" onclick="setMode('number')">#</button>
+                </div>
+            </div>
+            <div class="search-actions">
+                <button id="quickPlayBtn" onclick="quickAction(true)">▶ Play Now</button>
+                <button id="quickReserveBtn" class="reserve" onclick="quickAction(false)">Reserve</button>
+            </div>
+            <p id="quickHint" class="hint-text">Search by title/artist. The song is sent straight to the paired player.</p>
+        </section>
+
+        <!-- Songbook -->
+        <section class="glass-card">
+            <p class="card-label">Songbook</p>
+            <input type="text" id="songFilter" class="song-filter" placeholder="🔍 Filter title or artist..." oninput="filterSongs()" aria-label="Filter songbook">
+            <p class="hint-text" style="margin:0 0 12px;">Tap a song to play or reserve it.</p>
+            <div id="songList" class="song-list"></div>
+            <p id="songEmpty" class="empty-state">(No songs loaded)</p>
+        </section>
+    </div>
+
+    <!-- Song action modal -->
+    <div id="songModal" class="song-modal-overlay" style="display:none;" onclick="if(event.target===this)closeSongModal()">
+        <div class="song-modal" role="dialog" aria-modal="true" aria-labelledby="songModalTitle">
+            <span id="songModalNumber" class="song-number-badge">#</span>
+            <h2 id="songModalTitle">Song Title</h2>
+            <p id="songModalArtist" class="song-artist">Artist Name</p>
+            <div class="modal-actions">
+                <button onclick="sendModalAction(true)">▶ Play Now</button>
+                <button class="reserve" onclick="sendModalAction(false)">Reserve</button>
+            </div>
+            <button class="modal-cancel" onclick="closeSongModal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Command toast -->
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+    <script>
+        const CONFIG = {
+            SUPABASE_URL: 'https://blbwxnbbdsqkxbuvcrtn.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18',
+            CACHE_ENDPOINT: 'https://karaoke-backend-topaz.vercel.app/api/karaoke-cache',
+            YOUTUBE_API_KEY: 'AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI',
+            PREFERRED_CHANNELS: [
+                'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
+                'UCNbFgUCJj2Ls6LVzBbL8fqA', // KARAOKETV
+                'UCjpmz7p9aFNuHP_AuQDxYRw'  // HARANA KARAOKE
+            ]
+        };
+
+        const supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+        let allSongsData = [];
+        let currentSong = null;          // { code, title, artist }
+        let searchMode = 'text';
+        let playerId = null;
+        let wakeLock = null;
+        let presenceChannel = null;
+
+        // ---------------------------------------------------------------
+        // Pairing / identity
+        // ---------------------------------------------------------------
+        function getPlayerIdParam() {
+            const param = new URLSearchParams(window.location.search).get('player');
+            if (param) return param;
+            if (window.opener && window.opener.name && window.opener.name.startsWith('rk_player_')) {
+                return window.opener.name;
+            }
+            return null;
+        }
+
+        function connect(pid) {
+            if (!pid) return;
+            playerId = pid;
+            window.history.replaceState({}, '', window.location.pathname);
+            document.getElementById('pairCard').classList.add('hidden');
+            document.getElementById('remoteApp').classList.remove('hidden');
+            setupPlayerBadge(pid);
+            watchPlayerStatus(pid);
+            loadSongbook();
+        }
+
+        function tryPair() {
+            const input = document.getElementById('pairingId').value.trim();
+            if (!input) {
+                showToast('Paste a player ID first', 'error');
+                return;
+            }
+            connect(input);
+        }
+
+        function setupPlayerBadge(pid) {
+            const shortId = 'P-' + pid.slice(-6).toUpperCase();
+            const badge = document.getElementById('playerIdBadge');
+            badge.innerText = shortId;
+            badge.title = pid + ' (click to copy)';
+            document.getElementById('playerPill').onclick = () => copyPlayerId(pid);
+        }
+
+        async function copyPlayerId(pid) {
+            try {
+                await navigator.clipboard.writeText(pid);
+            } catch (e) {
+                const ta = document.createElement('textarea');
+                ta.value = pid;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); } catch (_) {}
+                ta.remove();
+            }
+            showToast('Player ID copied', 'success', pid);
+        }
+
+        // ---------------------------------------------------------------
+        // Player online status (online_players Realtime)
+        // ---------------------------------------------------------------
+        function watchPlayerStatus(pid) {
+            if (presenceChannel) presenceChannel.unsubscribe();
+            setOnline(false);
+
+            supabaseClient.from('online_players')
+                .select('player_id').eq('player_id', pid).maybeSingle()
+                .then(({ data }) => setOnline(!!data))
+                .catch(() => setOnline(false));
+
+            presenceChannel = supabaseClient
+                .channel('remote-presence-' + pid)
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'online_players', filter: 'player_id=eq.' + pid },
+                    (payload) => setOnline(payload.eventType === 'INSERT' || payload.eventType === 'UPDATE'))
+                .subscribe();
+        }
+
+        function setOnline(isOnline) {
+            document.getElementById('statusDot').classList.toggle('online', isOnline);
+        }
+
+        // ---------------------------------------------------------------
+        // Songbook
+        // ---------------------------------------------------------------
+        async function loadSongbook() {
+            const { data, error } = await supabaseClient
+                .from('karaoke_search_cache')
+                .select('id, video_title')
+                .eq('is_verified', true)
+                .order('video_title', { ascending: true });
+
+            if (error) {
+                console.error('Songbook load error:', error);
+                showToast('Could not load the songbook', 'error', error.message);
+                return;
+            }
+
+            allSongsData = (data || []).map(song => {
+                const parts = song.video_title.split(' - ');
+                return {
+                    code: String(song.id),
+                    title: parts[0],
+                    artist: parts.slice(1).join(' - ') || 'N/A'
+                };
+            });
+
+            renderSongbook();
+        }
+
+        function renderSongbook() {
+            const list = document.getElementById('songList');
+            const empty = document.getElementById('songEmpty');
+            empty.classList.toggle('hidden', allSongsData.length > 0);
+            list.innerHTML = allSongsData.map(song => {
+                const title = escapeHtml(song.title);
+                const artist = escapeHtml(song.artist);
+                return `
+                <div class="song-row" data-code="${song.code}">
+                    <div class="num">${song.code}</div>
+                    <div class="meta">
+                        <div class="title">${title}</div>
+                        <div class="artist">${artist}</div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            list.onclick = (e) => {
+                const row = e.target.closest('.song-row');
+                if (!row || !row.dataset.code) return;
+                const song = allSongsData.find(s => String(s.code) === row.dataset.code);
+                if (song) openSongModal(song.code, song.title, song.artist);
+            };
+
+            filterSongs();
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function filterSongs() {
+            const filter = document.getElementById('songFilter').value.toUpperCase();
+            const rows = document.querySelectorAll('#songList .song-row');
+            rows.forEach(row => {
+                row.style.display = row.innerText.toUpperCase().indexOf(filter) > -1 ? '' : 'none';
+            });
+        }
+
+        // ---------------------------------------------------------------
+        // Quick search (mirrors index.html sidebar logic)
+        // ---------------------------------------------------------------
+        function setMode(mode) {
+            searchMode = mode;
+            document.getElementById('textModeBtn').classList.toggle('active', mode === 'text');
+            document.getElementById('numberModeBtn').classList.toggle('active', mode === 'number');
+            const input = document.getElementById('quickSearchInput');
+            input.value = '';
+            input.placeholder = mode === 'number' ? 'Enter songbook number...' : 'Title, artist, or YouTube link...';
+            document.getElementById('quickHint').innerText = mode === 'number'
+                ? 'Type a songbook number — e.g. 42 — then Play Now or Reserve.'
+                : 'Search by title/artist. The song is sent straight to the paired player.';
+        }
+
+        async function quickAction(playNow) {
+            if (!playerId) {
+                showToast('Not paired with a player', 'error', 'Scan the QR code on the player screen.');
+                document.getElementById('pairCard').classList.remove('hidden');
+                return;
+            }
+            if (searchMode === 'number') await quickNumber(playNow);
+            else await quickText(playNow);
+        }
+
+        function extractVideoId(query) {
+            try {
+                const url = new URL(query);
+                if (url.hostname.includes('youtube.com')) return url.searchParams.get('v');
+                if (url.hostname === 'youtu.be') return url.pathname.slice(1);
+            } catch (e) {}
+            return (query.length === 11 && !query.includes(' ')) ? query : null;
+        }
+
+        async function fetchFromCache(query) {
+            try {
+                const res = await fetch(CONFIG.CACHE_ENDPOINT + '?query=' + encodeURIComponent(query));
+                if (res.status === 204 || !res.ok) return null;
+                const data = await res.json();
+                return (data.found || data.videoId) ? { id: data.videoId, title: data.videoTitle || data.title } : null;
+            } catch (err) {
+                console.error('Cache fetch error:', err);
+                return null;
+            }
+        }
+
+        function saveToCache(query, videoId, videoTitle) {
+            fetch(CONFIG.CACHE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, videoId, videoTitle })
+            }).catch(e => console.error('Cache save error:', e));
+        }
+
+        async function fetchFromYouTubeAPI(query) {
+            const apiKey = CONFIG.YOUTUBE_API_KEY;
+            if (!apiKey) return null;
+
+            const isRelevant = (resultTitle, originalQuery) => {
+                const doc = new DOMParser().parseFromString(resultTitle, 'text/html');
+                const decodedTitle = doc.documentElement.textContent.toLowerCase();
+                const cleanTitle = decodedTitle.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+                const cleanQuery = originalQuery.toLowerCase().replace(/karaoke/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+                if (!cleanQuery) return false;
+
+                const segments = decodedTitle.split(/[-|()\[\]]/).map(s =>
+                    s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+                ).filter(s => s.length > 0);
+
+                const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 0);
+                const squashedQuery = cleanQuery.replace(/\s+/g, '');
+
+                return segments.some(seg => {
+                    const segWords = seg.split(/\s+/).filter(w => w.length > 0);
+                    const squashedSeg = seg.replace(/\s+/g, '');
+                    const isPhraseFound = segWords.some((_, i) =>
+                        queryWords.every((word, j) => segWords[i + j] === word)
+                    );
+                    const isSquashedMatch = squashedSeg.includes(squashedQuery);
+                    const wordCountDiff = Math.abs(segWords.length - queryWords.length);
+                    return (isPhraseFound || isSquashedMatch) && wordCountDiff <= 2;
+                });
+            };
+
+            for (const channelId of CONFIG.PREFERRED_CHANNELS) {
+                try {
+                    const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=' +
+                        encodeURIComponent(query) + '&type=video&videoEmbeddable=true&channelId=' + channelId + '&key=' + apiKey;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    const item = data.items && data.items.find(it => isRelevant(it.snippet.title, query));
+                    if (item) return { id: item.id.videoId, title: item.snippet.title };
+                } catch (err) {
+                    console.error('Preferred channel search error:', err);
+                }
+            }
+
+            try {
+                const globalUrl = 'https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=' +
+                    encodeURIComponent(query) + '&type=video&videoEmbeddable=true&key=' + apiKey;
+                const res = await fetch(globalUrl);
+                const data = await res.json();
+                const item = data.items && data.items.find(it => isRelevant(it.snippet.title, query));
+                if (item) return { id: item.id.videoId, title: item.snippet.title };
+            } catch (e) {
+                return null;
+            }
+            return null;
+        }
+
+        async function quickText(playNow) {
+            const input = document.getElementById('quickSearchInput');
+            const query = input.value.trim();
+            if (!query) return;
+
+            const btn = playNow ? document.getElementById('quickPlayBtn') : document.getElementById('quickReserveBtn');
+            const original = btn.innerText;
+            setQuickLoading(true, btn);
+
+            try {
+                const directId = extractVideoId(query);
+                if (directId) {
+                    input.value = '';
+                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: directId, videoTitle: 'Direct link: ' + directId });
+                    return;
+                }
+
+                let processedQuery = query.toLowerCase().replace(/['"]/g, '').replace(/\s+/g, ' ').trim();
+                if (!processedQuery.includes('karaoke')) processedQuery += ' karaoke';
+                const cleanCacheQuery = processedQuery.replace(/[^a-z0-9]/g, '');
+
+                let result = await fetchFromCache(cleanCacheQuery);
+                if (!result) {
+                    result = await fetchFromYouTubeAPI(processedQuery);
+                    if (result) saveToCache(cleanCacheQuery, result.id, result.title);
+                }
+
+                if (result) {
+                    input.value = '';
+                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: result.id, videoTitle: result.title });
+                } else {
+                    showToast('Song not found', 'error', 'Try a different title or artist.');
+                }
+            } catch (err) {
+                console.error('Quick text search error:', err);
+                showToast('Search failed', 'error', 'Check your connection and try again.');
+            } finally {
+                setQuickLoading(false, btn, original);
+            }
+        }
+
+        async function quickNumber(playNow) {
+            const input = document.getElementById('quickSearchInput');
+            const code = input.value.trim();
+            if (!code) return;
+
+            const btn = playNow ? document.getElementById('quickPlayBtn') : document.getElementById('quickReserveBtn');
+            const original = btn.innerText;
+            setQuickLoading(true, btn);
+
+            try {
+                const res = await fetch(CONFIG.CACHE_ENDPOINT + '?id=' + encodeURIComponent(code));
+                if (res.status === 404 || res.status === 204) {
+                    showToast('Song number ' + code + ' is not listed in the songbook.', 'error');
+                    return;
+                }
+                if (!res.ok) throw new Error('Database connection error');
+                const data = await res.json();
+                if (!data.videoId) {
+                    showToast('Song number not found', 'error');
+                    return;
+                }
+                input.value = '';
+                await sendCommand({ action: playNow ? 'play' : 'reserve', songCode: code, videoTitle: data.videoTitle || '' });
+            } catch (err) {
+                console.error('Number lookup error:', err);
+                showToast('Error connecting to database', 'error');
+            } finally {
+                setQuickLoading(false, btn, original);
+            }
+        }
+
+        function setQuickLoading(isLoading, btn, original) {
+            btn.innerText = isLoading ? 'Searching...' : original;
+            btn.disabled = isLoading;
+        }
+
+        // ---------------------------------------------------------------
+        // Songbook modal
+        // ---------------------------------------------------------------
+        function openSongModal(code, title, artist) {
+            currentSong = { code, title, artist };
+            document.getElementById('songModalNumber').innerText = '#' + code;
+            document.getElementById('songModalTitle').innerText = title;
+            document.getElementById('songModalArtist').innerText = artist;
+            document.getElementById('songModal').style.display = 'flex';
+        }
+
+        function closeSongModal() {
+            document.getElementById('songModal').style.display = 'none';
+        }
+
+        async function sendModalAction(playNow) {
+            const song = currentSong;
+            closeSongModal();
+            if (!song) return;
+            await sendCommand({
+                action: playNow ? 'play' : 'reserve',
+                songCode: song.code,
+                videoTitle: song.title + ' - ' + song.artist
+            });
+        }
+
+        // ---------------------------------------------------------------
+        // Command delivery (Supabase remote_commands)
+        // ---------------------------------------------------------------
+        async function sendCommand(cmd) {
+            if (!playerId) {
+                showToast('Not paired with a player', 'error');
+                return;
+            }
+            requestWakeLock();
+
+            const shortId = 'P-' + playerId.slice(-6).toUpperCase();
+            const { data, error } = await supabaseClient.from('remote_commands').insert({
+                player_id: playerId,
+                action: cmd.action,
+                song_code: cmd.songCode || null,
+                video_id: cmd.videoId || null,
+                video_title: cmd.videoTitle || null,
+                status: 'pending'
+            }).select().single();
+
+            if (error || !data) {
+                console.error('Command insert error:', error);
+                showToast('Could not reach the player', 'error', 'Make sure the remote-control tables exist in Supabase.');
+                return;
+            }
+
+            const rowId = data.id;
+            showToast(cmd.action === 'play' ? '▶ Sending Play Now...' : '📥 Reserving...', '', 'Waiting for the player...');
+            vibrate(10);
+
+            const channel = supabaseClient
+                .channel('remote-cmd-' + rowId)
+                .on('postgres_changes',
+                    { event: 'UPDATE', schema: 'public', table: 'remote_commands', filter: 'id=eq.' + rowId },
+                    (payload) => {
+                        if (payload.new.status === 'ack') {
+                            channel.unsubscribe();
+                            showToast(cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved', 'success', shortId);
+                            vibrate(15);
+                        } else if (payload.new.status === 'failed') {
+                            channel.unsubscribe();
+                            showToast('Player could not play that song', 'error', shortId);
+                            vibrate([30, 40, 30]);
+                        }
+                    })
+                .subscribe();
+
+            setTimeout(async () => {
+                const { data: row } = await supabaseClient.from('remote_commands')
+                    .select('status').eq('id', rowId).single().catch(() => ({ data: null }));
+                if (row && row.status === 'pending') {
+                    channel.unsubscribe();
+                    showToast('Command sent — player offline?', 'error', 'No confirmation from ' + shortId);
+                }
+            }, 15000);
+        }
+
+        // ---------------------------------------------------------------
+        // Toast, vibration, wake lock
+        // ---------------------------------------------------------------
+        function showToast(message, type = '', sub = '') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (type || '');
+            toast.innerText = message;
+            if (sub) {
+                const span = document.createElement('span');
+                span.className = 'sub';
+                span.innerText = sub;
+                toast.appendChild(span);
+            }
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function vibrate(pattern) {
+            if (navigator.vibrate) navigator.vibrate(pattern);
+        }
+
+        async function requestWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (e) {
+                // Wake lock is best-effort
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && wakeLock === null) requestWakeLock();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !document.getElementById('remoteApp').classList.contains('hidden')) {
+                const active = document.activeElement;
+                if (active && active.id === 'quickSearchInput') quickAction(true);
+            }
+            if (e.key === 'Escape') closeSongModal();
+        });
+
+        // ---------------------------------------------------------------
+        // Boot
+        // ---------------------------------------------------------------
+        if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+            navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW registration failed:', e));
+        }
+
+        const pairedId = getPlayerIdParam();
+        if (pairedId) {
+            connect(pairedId);
+        } else {
+            document.getElementById('pairCard').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
