@@ -57,7 +57,8 @@ const KaraokeApp = {
         pendingSongbook: null,
         playerId: null,
         supabaseClient: null,
-        heartbeatInterval: null
+        heartbeatInterval: null,
+        commandPollInterval: null
     },
 
     // --- 3. Cached DOM Elements ---
@@ -929,9 +930,9 @@ const KaraokeApp = {
         };
     },
 
-    // Connects this player to the remote-control channel used by the future
-    // Android app: listens for Supabase Realtime commands addressed to THIS
-    // player's unique ID and publishes a heartbeat so remote apps can find it.
+    // Connects this player to the remote-control channel used by the phone
+    // remote / future Android app: publishes a heartbeat so remotes can find it,
+    // and polls for remote commands addressed to THIS player's unique ID.
     initRemoteControl() {
         if (typeof supabase === 'undefined') {
             console.warn("Remote control unavailable: supabase-js not loaded.");
@@ -944,7 +945,7 @@ const KaraokeApp = {
             return;
         }
         this.startHeartbeat();
-        this.subscribeRemoteCommands();
+        this.startCommandPoller();
     },
 
     // Periodically updates this player's online_players row so remote apps
@@ -974,46 +975,48 @@ const KaraokeApp = {
 
         window.addEventListener('beforeunload', () => {
             clearInterval(this.state.heartbeatInterval);
+            clearInterval(this.state.commandPollInterval);
             client.from('online_players').delete().eq('player_id', playerId)
                 .then(() => {}, () => {});
         });
     },
 
-    // Reacts to remote commands (play / reserve) inserted for THIS player ID.
-    subscribeRemoteCommands() {
+    // Reacts to remote commands (play / reserve) by POLLING the pending rows
+    // for THIS player ID. Uses plain REST (works on the free Supabase tier) —
+    // Realtime postgres_changes would require the paid Realtime add-on.
+    startCommandPoller() {
         const client = this.state.supabaseClient;
         const playerId = this.getPlayerId();
+        let processing = false;
 
-        client.channel('remote-commands-' + playerId)
-            .on('postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'remote_commands',
-                    filter: `player_id=eq.${playerId}`
-                },
-                async (payload) => {
-                    const row = payload.new;
-                    if (!row || row.status !== 'pending') return;
+        const poll = async () => {
+            if (processing) return;
+            processing = true;
+            try {
+                const { data } = await client.from('remote_commands')
+                    .select('*')
+                    .eq('player_id', playerId)
+                    .eq('status', 'pending')
+                    .limit(5);
 
-                    try {
-                        // Existing safety rules apply: e.g. gets queued instead of
-                        // interrupting an active performance, guarded while score is shown
-                        const playNow = row.action === 'play';
-                        const ok = row.video_id
-                            ? this.handleRemoteVideo(row, playNow)
-                            : await this.playSongByNumber(row.song_code, playNow);
-                        await client.from('remote_commands')
-                            .update({ status: ok ? 'ack' : 'failed' })
-                            .eq('id', row.id);
-                    } catch (err) {
-                        console.warn("Remote command failed:", err.message);
-                    }
+                for (const row of data || []) {
+                    const playNow = row.action === 'play';
+                    const ok = row.video_id
+                        ? this.handleRemoteVideo(row, playNow)
+                        : await this.playSongByNumber(row.song_code, playNow);
+                    await client.from('remote_commands')
+                        .update({ status: ok ? 'ack' : 'failed' })
+                        .eq('id', row.id);
                 }
-            )
-            .subscribe((status, err) => {
-                if (err) console.warn("Remote command channel error:", err.message);
-            });
+            } catch (err) {
+                console.warn("Remote command poll failed:", err.message);
+            } finally {
+                processing = false;
+            }
+        };
+
+        poll();
+        this.state.commandPollInterval = setInterval(poll, 2500);
     },
 
     // Plays a remote video_id command. Returns true if the command was accepted.

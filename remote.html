@@ -489,7 +489,7 @@
         let searchMode = 'text';
         let playerId = null;
         let wakeLock = null;
-        let presenceChannel = null;
+        let presenceTimer = null;
 
         // ---------------------------------------------------------------
         // Pairing / identity
@@ -548,23 +548,25 @@
         }
 
         // ---------------------------------------------------------------
-        // Player online status (online_players Realtime)
+        // Player online status (online_players heartbeat, REST polling)
         // ---------------------------------------------------------------
         function watchPlayerStatus(pid) {
-            if (presenceChannel) presenceChannel.unsubscribe();
+            if (presenceTimer) clearInterval(presenceTimer);
             setOnline(false);
 
-            supabaseClient.from('online_players')
-                .select('player_id').eq('player_id', pid).maybeSingle()
-                .then(({ data }) => setOnline(!!data))
-                .catch(() => setOnline(false));
+            const check = async () => {
+                try {
+                    const { data } = await supabaseClient.from('online_players')
+                        .select('last_seen').eq('player_id', pid).maybeSingle();
+                    const lastSeen = data && data.last_seen ? new Date(data.last_seen).getTime() : 0;
+                    setOnline(!!data && (Date.now() - lastSeen) < 30000);
+                } catch (err) {
+                    setOnline(false);
+                }
+            };
 
-            presenceChannel = supabaseClient
-                .channel('remote-presence-' + pid)
-                .on('postgres_changes',
-                    { event: '*', schema: 'public', table: 'online_players', filter: 'player_id=eq.' + pid },
-                    (payload) => setOnline(payload.eventType === 'INSERT' || payload.eventType === 'UPDATE'))
-                .subscribe();
+            check();
+            presenceTimer = setInterval(check, 5000);
         }
 
         function setOnline(isOnline) {
@@ -883,37 +885,39 @@
             showToast(cmd.action === 'play' ? '▶ Sending Play Now...' : '📥 Reserving...', '', 'Waiting for the player...');
             vibrate(10);
 
-            const channel = supabaseClient
-                .channel('remote-cmd-' + rowId)
-                .on('postgres_changes',
-                    { event: 'UPDATE', schema: 'public', table: 'remote_commands', filter: 'id=eq.' + rowId },
-                    (payload) => {
-                        if (payload.new.status === 'ack') {
-                            channel.unsubscribe();
-                            showToast(cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved', 'success', shortId);
-                            vibrate(15);
-                        } else if (payload.new.status === 'failed') {
-                            channel.unsubscribe();
-                            showToast('Player could not play that song', 'error', shortId);
-                            vibrate([30, 40, 30]);
-                        }
-                    })
-                .subscribe();
+            // Poll the command row until the player flips it to ack/failed.
+            // Plain REST polling — works on the free Supabase tier (Realtime is paid).
+            const pollInterval = 2000;
+            const maxAttempts = 10; // ~20s before declaring the player unreachable
+            let attempts = 0;
 
-            setTimeout(async () => {
-                let row = null;
+            const poll = async () => {
+                if (attempts >= maxAttempts) {
+                    showToast('Command sent — player offline?', 'error', 'No confirmation from ' + shortId);
+                    return;
+                }
+                attempts++;
                 try {
                     const res = await supabaseClient.from('remote_commands')
                         .select('status').eq('id', rowId).single();
-                    row = res.data;
+                    const status = res.data && res.data.status;
+                    if (status === 'ack') {
+                        showToast(cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved', 'success', shortId);
+                        vibrate(15);
+                        return;
+                    }
+                    if (status === 'failed') {
+                        showToast('Player could not play that song', 'error', shortId);
+                        vibrate([30, 40, 30]);
+                        return;
+                    }
                 } catch (err) {
                     console.warn('Command status check failed:', err.message);
                 }
-                if (row && row.status === 'pending') {
-                    channel.unsubscribe();
-                    showToast('Command sent — player offline?', 'error', 'No confirmation from ' + shortId);
-                }
-            }, 15000);
+                setTimeout(poll, pollInterval);
+            };
+
+            setTimeout(poll, pollInterval);
         }
 
         // ---------------------------------------------------------------
