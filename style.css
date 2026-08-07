@@ -613,6 +613,39 @@ input[type="number"]::-webkit-outer-spin-button {
     flex-shrink: 0;
 }
 
+.player-id-badge {
+    padding: 6px 12px;
+    border-radius: 24px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: var(--transition-smooth);
+}
+
+.player-id-badge:hover {
+    color: var(--text-primary);
+    border-color: var(--glass-border-hover, rgba(255, 255, 255, 0.25));
+    background: var(--glass-bg);
+}
+
+.player-id-badge.copied {
+    color: #4cd964;
+    border-color: rgba(76, 217, 100, 0.5);
+}
+
+@media (hover: none) {
+    .player-id-badge:hover {
+        color: var(--text-tertiary);
+        border-color: var(--glass-border);
+    }
+}
+
 .play-pause-btn {
     background: var(--accent-color);
     border: none;

@@ -363,6 +363,123 @@
             border: none !important;
         }
 
+        /* Clickable song rows */
+        .songbook-wrapper .song-table tbody tr {
+            cursor: pointer;
+        }
+
+        .songbook-wrapper .song-table tbody tr:active td {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* Song action dialog */
+        .song-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 5000;
+            padding: 20px;
+            animation: modalFadeIn 0.25s ease;
+        }
+
+        .song-modal {
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(24px, 5vw, 36px);
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 40px var(--accent-glow);
+            animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .song-number-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            color: #ffffff;
+            font-weight: 700;
+            font-size: clamp(18px, 4vw, 22px);
+            padding: 8px 24px;
+            border-radius: 40px;
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.35);
+            margin-bottom: 16px;
+        }
+
+        .song-modal h2 {
+            margin: 0 0 6px 0;
+            font-size: clamp(18px, 4.5vw, 24px);
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            word-wrap: break-word;
+        }
+
+        .song-modal .song-artist {
+            margin: 0 0 24px 0;
+            color: var(--text-secondary);
+            font-size: clamp(14px, 3vw, 16px);
+        }
+
+        .modal-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .modal-actions button {
+            width: 100%;
+        }
+
+        .modal-actions .reserve-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border-hover);
+            box-shadow: none;
+        }
+
+        .modal-actions .reserve-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 12px 32px rgba(255, 255, 255, 0.12);
+        }
+
+        .modal-cancel {
+            background: transparent !important;
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: none !important;
+            color: var(--text-tertiary) !important;
+            padding: 10px 20px !important;
+            font-weight: 500 !important;
+        }
+
+        .modal-cancel:hover {
+            color: var(--text-primary) !important;
+            border-color: var(--glass-border-hover) !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes modalSlideUp {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @media (max-width: 480px) {
+            .modal-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* Print Styles */
         @media print {
             @page {
@@ -388,6 +505,10 @@
             }
 
             .songbook-wrapper.no-print {
+                display: none !important;
+            }
+
+            .song-modal-overlay {
                 display: none !important;
             }
 
@@ -486,6 +607,20 @@
         </table>
     </div>
 
+    <!-- Song action dialog -->
+    <div id="songModal" class="song-modal-overlay" style="display: none;" onclick="if(event.target===this)closeSongModal()">
+        <div class="song-modal" role="dialog" aria-modal="true" aria-labelledby="songModalTitle">
+            <span id="songModalNumber" class="song-number-badge">#</span>
+            <h2 id="songModalTitle">Song Title</h2>
+            <p id="songModalArtist" class="song-artist">Artist Name</p>
+            <div class="modal-actions">
+                <button onclick="songAction(true)">▶ Play Now</button>
+                <button class="reserve-btn" onclick="songAction(false)">Reserve</button>
+            </div>
+            <button class="modal-cancel" onclick="closeSongModal()">Cancel</button>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18';
         const SUPABASE_URL = 'https://blbwxnbbdsqkxbuvcrtn.supabase.co';
@@ -550,20 +685,25 @@
                 `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
             ).join('');
 
+            // Rows in the on-screen tables carry the song code so clicks can open the dialog
+            const renderInteractiveRows = (data) => data.map(song => 
+                `<tr data-code="${song.id}"><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
+            ).join('');
+
             // Always populate the print-only table with the full data
             // This ensures a single, continuous list with one header for the printer
             printTableBody.innerHTML = renderRows(allSongsData);
 
             if (isMobile) {
                 // Render everything in one table for mobile
-                leftTableBody.innerHTML = renderRows(allSongsData);
+                leftTableBody.innerHTML = renderInteractiveRows(allSongsData);
                 rightTableBody.innerHTML = '';
                 secondTable.classList.add('hidden-table');
             } else {
                 // Split into two tables for desktop
                 const half = Math.ceil(allSongsData.length / 2);
-                leftTableBody.innerHTML = renderRows(allSongsData.slice(0, half));
-                rightTableBody.innerHTML = renderRows(allSongsData.slice(half));
+                leftTableBody.innerHTML = renderInteractiveRows(allSongsData.slice(0, half));
+                rightTableBody.innerHTML = renderInteractiveRows(allSongsData.slice(half));
                 secondTable.classList.remove('hidden-table');
             }
         }
@@ -599,6 +739,107 @@
         window.addEventListener('resize', renderSongbook);
         window.addEventListener('afterprint', renderSongbook);
 
+        // --- Song Action Dialog ---
+        let currentSongCode = null;
+
+        const SONGBOOK_ID_PREFIX = 'rk_songbook_';
+        const PLAYER_ID_PREFIX = 'rk_player_';
+
+        // Unique, persistent ID for THIS songbook instance (survives refresh, unique per tab)
+        function getSongbookId() {
+            if (window.name && window.name.startsWith(SONGBOOK_ID_PREFIX)) return window.name;
+            const rand = window.crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+            window.name = SONGBOOK_ID_PREFIX + rand;
+            return window.name;
+        }
+
+        // Resolves which player instance this songbook is linked to:
+        // 1. ?player=<id> on the URL (from the Open SongBook button / QR code)
+        // 2. The player tab that opened this songbook window (window.opener)
+        function getLinkedPlayerId() {
+            const param = new URLSearchParams(window.location.search).get('player');
+            if (param) return param;
+            if (window.opener && window.opener.name && window.opener.name.startsWith(PLAYER_ID_PREFIX)) {
+                return window.opener.name;
+            }
+            return null;
+        }
+
+        function openPlayerFallback(code, playNow) {
+            const url = `index.html?code=${encodeURIComponent(code)}&play=${playNow ? 1 : 0}`;
+            const win = window.open(url, '_blank');
+            if (!win) window.location.href = url; // Popup blocked (e.g. mobile) — navigate instead
+        }
+
+        function songAction(playNow) {
+            const code = currentSongCode;
+            closeSongModal();
+            if (code === null || code === undefined) return;
+
+            const targetPlayerId = getLinkedPlayerId();
+
+            // Linked to a specific player: message ONLY that player's private channel,
+            // so duplicated player tabs never react to this action.
+            if (targetPlayerId) {
+                let acked = false;
+                const channel = new BroadcastChannel('karaoke-sb-' + targetPlayerId);
+                channel.onmessage = (e) => {
+                    if (e.data && e.data.type === 'karaoke-song-action-ack') {
+                        acked = true;
+                        channel.close();
+                    }
+                };
+                channel.postMessage({
+                    type: 'karaoke-song-action',
+                    action: playNow ? 'play' : 'reserve',
+                    code,
+                    from: getSongbookId()
+                });
+
+                // If the targeted player didn't acknowledge (e.g. QR scanned on
+                // another device), open a new player with the song pre-loaded
+                setTimeout(() => {
+                    if (acked) { channel.close(); return; }
+                    channel.close();
+                    openPlayerFallback(code, playNow);
+                }, 500);
+                return;
+            }
+
+            // No linked player known — open the player and play the song there
+            openPlayerFallback(code, playNow);
+        }
+
+        function attachRowClickHandlers() {
+            const bodies = [document.getElementById('leftTableBody'), document.getElementById('rightTableBody')];
+            bodies.forEach(body => {
+                if (!body) return;
+                body.addEventListener('click', (e) => {
+                    const row = e.target.closest('tr');
+                    if (!row || !row.dataset.code) return;
+                    const cells = row.querySelectorAll('td');
+                    openSongModal(row.dataset.code, cells[1]?.textContent || '', cells[2]?.textContent || '');
+                });
+            });
+        }
+
+        function openSongModal(code, title, artist) {
+            currentSongCode = code;
+            document.getElementById('songModalNumber').innerText = '#' + code;
+            document.getElementById('songModalTitle').innerText = title;
+            document.getElementById('songModalArtist').innerText = artist;
+            document.getElementById('songModal').style.display = 'flex';
+        }
+
+        function closeSongModal() {
+            document.getElementById('songModal').style.display = 'none';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeSongModal();
+        });
+
+        attachRowClickHandlers();
         loadSongbook();
     </script>
 </body>

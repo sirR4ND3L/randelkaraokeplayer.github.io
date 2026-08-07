@@ -11,6 +11,8 @@ const KaraokeApp = {
             'AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI'
         ],
         CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
+        SUPABASE_URL: "https://blbwxnbbdsqkxbuvcrtn.supabase.co",
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18",
         SOUND_EFFECTS: {
             CHEER: "soundEffects/scoreSound.mp3",
             SUCCESS: "soundEffects/scoreSound.mp3",
@@ -51,7 +53,11 @@ const KaraokeApp = {
         scoringInterval: null,
         isScoreRevealed: false,
         scoreAudio: null,
-        lastDetectedPitch: 0
+        lastDetectedPitch: 0,
+        pendingSongbook: null,
+        playerId: null,
+        supabaseClient: null,
+        heartbeatInterval: null
     },
 
     // --- 3. Cached DOM Elements ---
@@ -63,10 +69,14 @@ const KaraokeApp = {
     async init() {
         await this.loadGlobalComponents();
         this.cacheElements();
+        this.initPlayerBadge();
         this.loadYouTubeAPI();
         this.attachEventListeners();
         this.initMobileScaling();
         this.initSidebarQR();
+        this.initSongbookBridge();
+        this.initRemoteControl();
+        this.parseURLParams();
     },
 
     // Fetches and injects modular UI components like the custom alert.
@@ -90,7 +100,7 @@ const KaraokeApp = {
             'liveScoreValue', 'liveScorePlayer', 'scoreOverlay', 'finalScore', 
             'finalRank', 'finalMessage', 'micPulseIndicator',
             'sidebarSearchInput', 'sidebarPlayBtn', 'sidebarReserveBtn', 'sidebarToggleSearchBtn',
-            'sidebarQrCode', 'playPauseBtn', 'openSBBtn',
+            'sidebarQrCode', 'playPauseBtn', 'openSBBtn', 'playerIdBadge',
             'alertTitle', 'alertMessage', 'customAlert'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
@@ -130,6 +140,13 @@ const KaraokeApp = {
     onPlayerReady() {
         this.startSync();
         this.state.player.setVolume(100);
+
+        // If the page was opened from the songbook (?code=X&play=Y), start that song now
+        if (this.state.pendingSongbook) {
+            const pending = this.state.pendingSongbook;
+            this.state.pendingSongbook = null;
+            this.playSongByNumber(pending.code, pending.playNow);
+        }
     },
 
     // Handles logic for when a song ends or is paused.
@@ -226,39 +243,58 @@ const KaraokeApp = {
         console.log(`🔢 Looking up song code: ${id}`);
 
         this.setSearchLoading(true, searchBtn, originalText);
-        let isSuccess = false;
+        const isSuccess = await this.playSongByNumber(id, playNow);
+        this.setSearchLoading(false, searchBtn, originalText);
+
+        if (isSuccess) {
+            input.value = "";
+            this.showSearchFeedback(searchBtn, successText, originalText);
+        }
+    },
+
+    // Fetch a cached song's video details by its songbook number.
+    async fetchSongByCode(id) {
+        const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(id)}`);
+
+        // Explicit check for 404 Not Found or 204 No Content
+        if (res.status === 404 || res.status === 204) {
+            console.log("❌ Song number is not listed in the songbook.");
+            return { found: false, reason: 'not_listed' };
+        }
+
+        if (!res.ok) throw new Error("❌ Database connection error");
+
+        const data = await res.json();
+        if (data && data.videoId) {
+            return { found: true, videoId: data.videoId, videoTitle: data.videoTitle };
+        }
+        return { found: false, reason: 'not_found' };
+    },
+
+    // Shared number-lookup used by the search bar AND remote songbook requests.
+    async playSongByNumber(id, playNow = true) {
+        if (this.state.isScoreRevealed) return false;
+        const code = String(id).trim();
+        if (!code) return false;
 
         try {
-            // Fetching from your backend using the ID parameter
-            const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(id)}`);
-
-            // Explicit check for 404 Not Found or 204 No Content
-            if (res.status === 404 || res.status === 204) {
-                this.showCustomAlert(`Song number ${id} is not listed in the songbook.`, "Song Not Found");
-                console.log("❌ Song number is not listed in the songbook.");
-                return;
-            }
-
-            if (!res.ok) throw new Error("❌ Database connection error");
-
-            const data = await res.json();
-            
-            if (data && data.videoId) {
-                input.value = "";
-                console.log(`✅ Found song: (Number: ${id}) (Title: ${data.videoTitle}) (ID: ${data.videoId})`);
-                this.handleFoundVideo(data.videoId, playNow, data.videoTitle);
-                isSuccess = true;
+            const result = await this.fetchSongByCode(code);
+            if (result.found) {
+                console.log(`✅ Found song: (Number: ${code}) (Title: ${result.videoTitle}) (ID: ${result.videoId})`);
+                this.handleFoundVideo(result.videoId, playNow, result.videoTitle);
                 console.log("🎉 Successfully added song using number!");
+                return true;
+            }
+            if (result.reason === 'not_listed') {
+                this.showCustomAlert(`Song number ${code} is not listed in the songbook.`, "Song Not Found");
             } else {
                 this.showCustomAlert("Song number not found!");
             }
         } catch (err) {
             console.error("Number lookup error:", err);
             this.showCustomAlert("Error connecting to database.");
-        } finally {
-            this.setSearchLoading(false, searchBtn, originalText);
-            if (isSuccess) this.showSearchFeedback(searchBtn, successText, originalText);
         }
+        return false;
     },
 
     // Fetches previously searched results from the custom backend.
@@ -821,14 +857,174 @@ const KaraokeApp = {
         if (!container || typeof QRCode === 'undefined') return;
         container.innerHTML = '';
         new QRCode(container, {
-            text: "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/songbook.html",
+            text: "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/songbook.html?player=" + encodeURIComponent(this.getPlayerId()),
             width: 160,
             height: 160
         });
     },
 
     openSongBook() {
-        window.open('songbook.html', '_blank');
+        window.open('songbook.html?player=' + encodeURIComponent(this.getPlayerId()), '_blank');
+    },
+
+    // Returns this tab's unique, persistent player instance ID.
+    // The ID survives refreshes (window.name) but is unique per tab,
+    // so duplicated player tabs never share the same identity.
+    getPlayerId() {
+        if (this.state.playerId) return this.state.playerId;
+        const prefix = 'rk_player_';
+        let id = window.name;
+        if (!id || !id.startsWith(prefix)) {
+            const rand = window.crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+            id = prefix + rand;
+            window.name = id;
+        }
+        this.state.playerId = id;
+        return id;
+    },
+
+    // Short readable form of the player ID for display (e.g. P-3F9A2C).
+    getPlayerShortId() {
+        return 'P-' + this.getPlayerId().slice(-6).toUpperCase();
+    },
+
+    // Shows the short player ID badge and enables click-to-copy of the full ID.
+    initPlayerBadge() {
+        const badge = this.elements.playerIdBadge;
+        if (!badge) return;
+        badge.innerText = this.getPlayerShortId();
+        badge.title = 'Player ID: ' + this.getPlayerId() + ' (click to copy)';
+        badge.addEventListener('click', () => this.copyPlayerId(badge));
+    },
+
+    // Copies the full player ID to the clipboard with brief visual feedback.
+    async copyPlayerId(badge) {
+        const original = badge.innerText;
+        try {
+            await navigator.clipboard.writeText(this.getPlayerId());
+            badge.innerText = 'Copied ✓';
+            badge.classList.add('copied');
+        } catch (err) {
+            badge.innerText = 'Copy failed';
+        }
+        setTimeout(() => {
+            badge.innerText = original;
+            badge.classList.remove('copied');
+        }, 1500);
+    },
+
+    // Listens for Play Now / Reserve requests coming from THIS tab's linked songbook.
+    // The channel name includes this player's unique ID, so other duplicate
+    // player tabs never receive (or react to) these messages.
+    initSongbookBridge() {
+        if (typeof BroadcastChannel === 'undefined') return;
+        const channel = new BroadcastChannel('karaoke-sb-' + this.getPlayerId());
+        channel.onmessage = async (e) => {
+            const msg = e.data;
+            if (!msg || msg.type !== 'karaoke-song-action') return;
+            // Acknowledge immediately so the songbook knows a player tab is listening
+            channel.postMessage({ type: 'karaoke-song-action-ack' });
+            const playNow = msg.action === 'play';
+            await this.playSongByNumber(msg.code, playNow);
+        };
+    },
+
+    // Connects this player to the remote-control channel used by the future
+    // Android app: listens for Supabase Realtime commands addressed to THIS
+    // player's unique ID and publishes a heartbeat so remote apps can find it.
+    initRemoteControl() {
+        if (typeof supabase === 'undefined') {
+            console.warn("Remote control unavailable: supabase-js not loaded.");
+            return;
+        }
+        try {
+            this.state.supabaseClient = supabase.createClient(this.CONFIG.SUPABASE_URL, this.CONFIG.SUPABASE_ANON_KEY);
+        } catch (err) {
+            console.warn("Remote control unavailable:", err.message);
+            return;
+        }
+        this.startHeartbeat();
+        this.subscribeRemoteCommands();
+    },
+
+    // Periodically updates this player's online_players row so remote apps
+    // (Android app) can discover and list it. Removes the row on unload.
+    startHeartbeat() {
+        const client = this.state.supabaseClient;
+        const playerId = this.getPlayerId();
+
+        const heartbeat = async () => {
+            try {
+                await client.from('online_players').upsert({
+                    player_id: playerId,
+                    short_id: this.getPlayerShortId(),
+                    last_seen: new Date().toISOString()
+                }, { onConflict: 'player_id' });
+            } catch (err) {
+                // Fail silently: the remote-control tables may not exist yet
+                if (this.state.remoteWarned !== true) {
+                    this.state.remoteWarned = true;
+                    console.warn("Heartbeat failed:", err.message);
+                }
+            }
+        };
+
+        heartbeat();
+        this.state.heartbeatInterval = setInterval(heartbeat, 10000);
+
+        window.addEventListener('beforeunload', () => {
+            clearInterval(this.state.heartbeatInterval);
+            client.from('online_players').delete().eq('player_id', playerId).catch(() => {});
+        });
+    },
+
+    // Reacts to remote commands (play / reserve) inserted for THIS player ID.
+    subscribeRemoteCommands() {
+        const client = this.state.supabaseClient;
+        const playerId = this.getPlayerId();
+
+        client.channel('remote-commands-' + playerId)
+            .on('postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'remote_commands',
+                    filter: `player_id=eq.${playerId}`
+                },
+                async (payload) => {
+                    const row = payload.new;
+                    if (!row || !row.song_code || row.status !== 'pending') return;
+
+                    try {
+                        // Existing safety rules apply: e.g. gets queued instead of
+                        // interrupting an active performance, guarded while score is shown
+                        const playNow = row.action === 'play';
+                        const ok = await this.playSongByNumber(row.song_code, playNow);
+                        await client.from('remote_commands')
+                            .update({ status: ok ? 'ack' : 'failed' })
+                            .eq('id', row.id);
+                    } catch (err) {
+                        console.warn("Remote command failed:", err.message);
+                    }
+                }
+            )
+            .subscribe((status, err) => {
+                if (err) console.warn("Remote command channel error:", err.message);
+            });
+    },
+
+    // Reads ?code=X&play=Y from the URL (opened directly from the songbook)
+    // and schedules playback once the YouTube player is ready.
+    parseURLParams() {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (!code) return;
+        this.state.pendingSongbook = {
+            code,
+            playNow: params.get('play') !== '0'
+        };
+        // Clean the URL so a refresh doesn't replay the song
+        history.replaceState({}, '', window.location.pathname);
     },
 
     showCustomAlert(message, title = "System Alert!") {
@@ -964,6 +1160,8 @@ window.closeCustomAlert = () => KaraokeApp.closeCustomAlert();
 window.openSongBook = () => KaraokeApp.openSongBook();
 window.togglePlayPause = () => KaraokeApp.togglePlayPause();
 window.sidebarSearch = (playNow) => KaraokeApp.sidebarSearch(playNow);
+window.getPlayerShortId = () => KaraokeApp.getPlayerShortId();
+window.getPlayerId = () => KaraokeApp.getPlayerId();
 
 // --- 12. App Launch ---
 // Self-executing initialization on DOM load.
