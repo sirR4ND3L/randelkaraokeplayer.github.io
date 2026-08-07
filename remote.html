@@ -901,8 +901,14 @@
                 .subscribe();
 
             setTimeout(async () => {
-                const { data: row } = await supabaseClient.from('remote_commands')
-                    .select('status').eq('id', rowId).single().catch(() => ({ data: null }));
+                let row = null;
+                try {
+                    const res = await supabaseClient.from('remote_commands')
+                        .select('status').eq('id', rowId).single();
+                    row = res.data;
+                } catch (err) {
+                    console.warn('Command status check failed:', err.message);
+                }
                 if (row && row.status === 'pending') {
                     channel.unsubscribe();
                     showToast('Command sent — player offline?', 'error', 'No confirmation from ' + shortId);

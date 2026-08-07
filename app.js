@@ -974,7 +974,8 @@ const KaraokeApp = {
 
         window.addEventListener('beforeunload', () => {
             clearInterval(this.state.heartbeatInterval);
-            client.from('online_players').delete().eq('player_id', playerId).catch(() => {});
+            client.from('online_players').delete().eq('player_id', playerId)
+                .then(() => {}, () => {});
         });
     },
 
