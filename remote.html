@@ -387,6 +387,63 @@
             font-weight: 500 !important;
         }
 
+        /* Scanner */
+        .scanner-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 5500;
+            padding: clamp(12px, 4vw, 24px);
+            animation: modalFadeIn 0.25s ease;
+        }
+
+        .scanner-card {
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(16px, 5vw, 26px);
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        .scanner-view {
+            position: relative;
+            border-radius: 18px;
+            overflow: hidden;
+            aspect-ratio: 1;
+            background: #000;
+            border: 1px solid var(--glass-border);
+        }
+
+        #scannerVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            min-height: 0;
+        }
+
+        .scanner-frame {
+            position: absolute;
+            inset: 12%;
+            border: 2px solid var(--accent-color);
+            border-radius: 16px;
+            box-shadow: 0 0 20px var(--accent-glow), inset 0 0 20px rgba(0, 122, 255, 0.15);
+            pointer-events: none;
+            animation: framePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes framePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.45; }
+        }
+
         /* Toast */
         .toast-container {
             position: fixed;
@@ -515,8 +572,9 @@
         </div>
         <div class="search-actions">
             <button onclick="tryPair()">Pair</button>
+            <button id="scanBtn" class="reserve" onclick="openScanner()">📷 Scan Player QR</button>
         </div>
-        <p class="hint-text" style="text-align:center;">Tip: open the player tab and click its <b>P-XXXXXX</b> badge to copy the full ID.</p>
+        <p class="hint-text" style="text-align:center;">Tip: open the player tab and click its <b>P-XXXXXX</b> badge to copy the full ID, or scan its QR code.</p>
     </section>
 
     <div id="remoteApp" class="remote-stack hidden">
@@ -559,6 +617,22 @@
         </div>
     </div>
 
+    <!-- QR scanner overlay -->
+    <div id="scannerOverlay" class="scanner-overlay hidden">
+        <div class="scanner-card">
+            <p class="card-label" style="text-align:center;">Scan the player QR</p>
+            <div class="scanner-view">
+                <video id="scannerVideo" playsinline muted autoplay></video>
+                <div class="scanner-frame"></div>
+            </div>
+            <p id="scannerStatus" class="hint-text" style="text-align:center;margin-top:12px;">Starting camera...</p>
+            <div class="search-actions" style="margin-top:14px;">
+                <button id="torchBtn" class="reserve hidden" onclick="toggleTorch()">🔦 Torch</button>
+                <button class="modal-cancel" onclick="closeScanner()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Command toast -->
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
@@ -582,6 +656,12 @@
         let playerId = null;
         let wakeLock = null;
         let presenceTimer = null;
+        let scannerStream = null;
+        let scanLoop = null;
+        let scanDetector = null;
+        let scanCanvas = null;
+        let lastScanAt = 0;
+        let torchOn = false;
 
         // ---------------------------------------------------------------
         // Pairing / identity
@@ -612,7 +692,12 @@
                 showToast('Paste a player ID first', 'error');
                 return;
             }
-            connect(input);
+            if (/^p-?\w{4,8}$/i.test(input)) {
+                showToast("That's the short badge, not the ID", 'error',
+                    'Tap the P-XXXXXX badge on the player to copy the full rk_player_... ID, then paste that.');
+                return;
+            }
+            connect(input.toLowerCase());
         }
 
         function setupPlayerBadge(pid) {
@@ -637,6 +722,164 @@
                 ta.remove();
             }
             showToast('Player ID copied', 'success', pid);
+        }
+
+        // ---------------------------------------------------------------
+        // QR code scanner (pairs by scanning the player's QR)
+        // ---------------------------------------------------------------
+        const JSQR_URL = 'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js';
+
+        function loadJsQR() {
+            if (window.jsQR) return Promise.resolve(true);
+            return new Promise((resolve) => {
+                const s = document.createElement('script');
+                s.src = JSQR_URL;
+                s.onload = () => resolve(!!window.jsQR);
+                s.onerror = () => resolve(false);
+                document.head.appendChild(s);
+            });
+        }
+
+        async function openScanner() {
+            const overlay = document.getElementById('scannerOverlay');
+            overlay.classList.remove('hidden');
+            document.getElementById('scannerVideo').srcObject = null;
+            document.getElementById('torchBtn').classList.add('hidden');
+            setScannerStatus('Starting camera...');
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setScannerStatus('Camera not supported here — paste the ID below instead.');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } }
+                });
+                scannerStream = stream;
+                const track = stream.getVideoTracks()[0];
+                const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+                if (caps && caps.torch) document.getElementById('torchBtn').classList.remove('hidden');
+
+                const video = document.getElementById('scannerVideo');
+                video.srcObject = stream;
+                await video.play();
+                setScannerStatus('Point at the QR code on the player screen');
+
+                if ('BarcodeDetector' in window && BarcodeDetector.getSupportedFormats) {
+                    const formats = await BarcodeDetector.getSupportedFormats();
+                    if (formats.includes('qr_code')) {
+                        scanDetector = new BarcodeDetector({ formats: ['qr_code'] });
+                        scanLoop = requestAnimationFrame(scanNative);
+                        return;
+                    }
+                }
+
+                const ok = await loadJsQR();
+                if (!ok) {
+                    setScannerStatus('QR detection unavailable — paste the ID below instead.');
+                    return;
+                }
+                scanCanvas = document.createElement('canvas');
+                scanLoop = requestAnimationFrame(scanFallback);
+            } catch (err) {
+                console.error('Scanner start error:', err);
+                setScannerStatus(err && err.name === 'NotAllowedError'
+                    ? 'Camera access denied — allow the camera in Chrome settings, or paste the ID below.'
+                    : 'Could not start the camera. Paste the ID below instead.');
+            }
+        }
+
+        function setScannerStatus(msg) {
+            const el = document.getElementById('scannerStatus');
+            if (el) el.innerText = msg;
+        }
+
+        async function scanNative() {
+            const now = performance.now();
+            if (now - lastScanAt > 120) {
+                lastScanAt = now;
+                try {
+                    const codes = await scanDetector.detect(document.getElementById('scannerVideo'));
+                    if (codes && codes.length) {
+                        handleScan(codes[0].rawValue);
+                        return;
+                    }
+                } catch (e) {}
+            }
+            scanLoop = requestAnimationFrame(scanNative);
+        }
+
+        function scanFallback() {
+            const now = performance.now();
+            const video = document.getElementById('scannerVideo');
+            if (now - lastScanAt > 120 && video.readyState >= 2 && video.videoWidth) {
+                lastScanAt = now;
+                const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+                scanCanvas.width = Math.round(video.videoWidth * scale);
+                scanCanvas.height = Math.round(video.videoHeight * scale);
+                const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+                const code = jsQR(
+                    ctx.getImageData(0, 0, scanCanvas.width, scanCanvas.height).data,
+                    scanCanvas.width, scanCanvas.height,
+                    { inversionAttempts: 'dontInvert' }
+                );
+                if (code && code.data) {
+                    handleScan(code.data);
+                    return;
+                }
+            }
+            scanLoop = requestAnimationFrame(scanFallback);
+        }
+
+        function parseScannedId(text) {
+            if (!text) return null;
+            try {
+                const url = new URL(text);
+                let p = url.searchParams.get('player');
+                if (p) {
+                    try { p = decodeURIComponent(p); } catch (_) {}
+                    return p;
+                }
+            } catch (_) {}
+            if (text.startsWith('rk_player_')) return text;
+            return null;
+        }
+
+        async function handleScan(text) {
+            const pid = parseScannedId(text);
+            if (!pid) return;
+            vibrate(20);
+            closeScanner();
+            showToast('Player found', 'success', 'P-' + pid.slice(-6).toUpperCase());
+            connect(pid);
+        }
+
+        function closeScanner() {
+            if (scanLoop) cancelAnimationFrame(scanLoop);
+            scanLoop = null;
+            scanDetector = null;
+            if (scannerStream) {
+                scannerStream.getTracks().forEach(t => t.stop());
+                scannerStream = null;
+            }
+            const overlay = document.getElementById('scannerOverlay');
+            if (overlay) overlay.classList.add('hidden');
+            const video = document.getElementById('scannerVideo');
+            if (video) video.srcObject = null;
+        }
+
+        async function toggleTorch() {
+            if (!scannerStream) return;
+            const track = scannerStream.getVideoTracks()[0];
+            if (!track || !track.applyConstraints) return;
+            torchOn = !torchOn;
+            try {
+                await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+            } catch (e) {
+                torchOn = false;
+            }
         }
 
         // ---------------------------------------------------------------
@@ -999,7 +1242,14 @@
                 const active = document.activeElement;
                 if (active && active.id === 'quickSearchInput') quickText(true);
             }
-            if (e.key === 'Escape') closeSongModal();
+            if (e.key === 'Escape') {
+                closeSongModal();
+                closeScanner();
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            if (scannerStream) scannerStream.getTracks().forEach(t => t.stop());
         });
 
         // ---------------------------------------------------------------
