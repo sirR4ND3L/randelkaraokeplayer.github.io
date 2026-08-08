@@ -13,6 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Karaoke Remote">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,9 +35,16 @@
             --success: #30d158;
             --danger: #ff453a;
             --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            --page-x: clamp(12px, 4vw, 20px);
+            --page-y: clamp(12px, 4vw, 18px);
+            --card-pad: clamp(16px, 5vw, 26px);
+            --stack-gap: clamp(12px, 4vw, 20px);
         }
 
         * { box-sizing: border-box; }
+
+        html, body { overflow-x: hidden; }
+        html, body { overflow-x: clip; }
 
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -44,14 +52,31 @@
 
         html { -webkit-text-size-adjust: 100%; }
 
+        img { max-width: 100%; height: auto; }
+
+        ::selection { background: rgba(0, 122, 255, 0.35); }
+
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+            -webkit-text-fill-color: var(--text-primary);
+            -webkit-box-shadow: 0 0 0 1000px var(--bg-secondary) inset;
+            caret-color: var(--text-primary);
+        }
+
         body {
             font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            background-color: var(--bg-primary);
+            background-image: linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
             background-attachment: fixed;
             color: var(--text-primary);
-            padding: calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+            padding:
+                calc(var(--page-y) + env(safe-area-inset-top))
+                calc(var(--page-x) + env(safe-area-inset-left))
+                calc(var(--page-y) + 8px + env(safe-area-inset-bottom))
+                calc(var(--page-x) + env(safe-area-inset-right));
             margin: 0;
             min-height: 100vh;
+            min-height: 100dvh;
+            overscroll-behavior-y: contain;
             -webkit-font-smoothing: antialiased;
         }
 
@@ -64,8 +89,8 @@
         h1 {
             font-weight: 600;
             letter-spacing: -0.5px;
-            font-size: clamp(1.8rem, 7vw, 2.6rem);
-            margin: 0 0 12px 0;
+            font-size: clamp(1.5rem, 6.5vw, 2.4rem);
+            margin: 0 0 10px 0;
             background: linear-gradient(135deg, var(--text-primary) 0%, rgba(255, 255, 255, 0.8) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -87,6 +112,8 @@
             transition: var(--transition);
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
         }
 
         .player-pill:active { transform: scale(0.97); }
@@ -115,14 +142,14 @@
             background: var(--glass-lighter);
             border: 1px solid var(--glass-border);
             border-radius: 24px;
-            padding: clamp(20px, 5vw, 32px);
+            padding: var(--card-pad);
             text-align: center;
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
-        .pair-card h2 { margin: 0 0 8px; font-weight: 600; }
+        .pair-card h2 { margin: 0 0 8px; font-weight: 600; font-size: clamp(1.2rem, 5.5vw, 1.5rem); }
         .pair-card p { color: var(--text-secondary); margin: 0 0 18px; font-size: 14px; line-height: 1.6; }
 
         .glass-card {
@@ -132,7 +159,8 @@
             backdrop-filter: blur(30px);
             -webkit-backdrop-filter: blur(30px);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: clamp(18px, 5vw, 26px);
+            padding: var(--card-pad);
+            min-width: 0;
         }
 
         .card-label {
@@ -144,12 +172,12 @@
             margin: 0 0 14px;
         }
 
-        .remote-stack { display: grid; gap: clamp(14px, 4vw, 20px); max-width: 640px; margin: 0 auto; }
+        .remote-stack { display: grid; gap: var(--stack-gap); max-width: 640px; margin: 0 auto; min-width: 0; }
 
         /* Quick search */
         .search-row { display: flex; gap: 10px; }
 
-        .search-input-wrapper { flex: 1; position: relative; }
+        .search-input-wrapper { flex: 1; position: relative; min-width: 0; }
 
         .search-input-wrapper input {
             background: var(--glass-light);
@@ -158,7 +186,10 @@
             border-radius: 28px;
             color: var(--text-primary);
             width: 100%;
+            min-height: 48px;
             font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
             transition: var(--transition);
         }
 
@@ -171,48 +202,23 @@
             box-shadow: 0 0 40px var(--accent-glow);
         }
 
-        .search-mode-toggle {
-            background: var(--glass-light);
-            border: 1px solid var(--glass-border);
-            border-radius: 28px;
-            padding: 4px;
-            display: flex;
-            gap: 4px;
-            flex-shrink: 0;
-        }
-
-        .search-mode-toggle button {
-            background: transparent;
-            border: none;
-            color: var(--text-tertiary);
-            padding: 9px 16px;
-            border-radius: 22px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .search-mode-toggle button.active {
-            background: var(--accent-color);
-            color: #fff;
-            box-shadow: 0 4px 14px rgba(0, 122, 255, 0.4);
-        }
-
         .search-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 
         button {
             background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
             color: white;
             border: 1px solid rgba(0, 122, 255, 0.3);
-            padding: 13px 20px;
-            border-radius: 26px;
+            padding: 12px 20px;
+            border-radius: 28px;
             cursor: pointer;
-            font-size: 14px;
+            min-height: 48px;
+            font-size: 15px;
             font-weight: 600;
             transition: var(--transition);
             box-shadow: 0 8px 24px rgba(0, 122, 255, 0.25);
             -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
         }
 
         button:active { transform: scale(0.97); box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); }
@@ -247,11 +253,15 @@
         .song-filter {
             background: var(--glass-light);
             border: 1px solid var(--glass-border);
-            padding: 12px 16px;
+            padding: 13px 16px;
             border-radius: 26px;
             color: var(--text-primary);
             width: 100%;
-            font-size: 15px;
+            min-width: 0;
+            min-height: 48px;
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
             margin-bottom: 12px;
             transition: var(--transition);
         }
@@ -265,7 +275,20 @@
             box-shadow: 0 0 30px var(--accent-glow);
         }
 
-        .song-list { display: grid; gap: 8px; max-height: 52vh; overflow-y: auto; padding-right: 2px; }
+        .song-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+            align-content: start;
+            gap: 8px;
+            max-height: 52vh;
+            max-height: min(52dvh, 480px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior-y: contain;
+            scrollbar-width: thin;
+            padding-right: 2px;
+            min-width: 0;
+        }
 
         .song-row {
             display: flex;
@@ -274,10 +297,13 @@
             background: var(--glass-light);
             border: 1px solid var(--glass-border);
             border-radius: 16px;
-            padding: 12px 14px;
+            padding: 11px 14px;
+            min-height: 58px;
             cursor: pointer;
             transition: var(--transition);
             -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
         }
 
         .song-row:hover { border-color: var(--glass-border-hover); background: rgba(255, 255, 255, 0.1); }
@@ -314,7 +340,7 @@
             justify-content: center;
             align-items: center;
             z-index: 5000;
-            padding: 20px;
+            padding: clamp(12px, 4vw, 20px);
             animation: modalFadeIn 0.25s ease;
         }
 
@@ -322,9 +348,12 @@
             background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
             border: 1px solid var(--glass-border);
             border-radius: 24px;
-            padding: clamp(24px, 6vw, 36px);
+            padding: clamp(20px, 6vw, 32px);
             max-width: 420px;
             width: 100%;
+            max-height: calc(100dvh - 2 * clamp(12px, 4vw, 20px));
+            overflow-y: auto;
+            overscroll-behavior: contain;
             text-align: center;
             box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 40px var(--accent-glow);
             animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -335,15 +364,19 @@
             background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
             color: #ffffff;
             font-weight: 700;
-            font-size: 18px;
-            padding: 8px 24px;
+            font-size: clamp(14px, 4vw, 18px);
+            padding: 7px 20px;
             border-radius: 40px;
             box-shadow: 0 8px 24px rgba(0, 122, 255, 0.35);
-            margin-bottom: 16px;
+            margin-bottom: 14px;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: break-all;
+            line-height: 1.4;
         }
 
-        .song-modal h2 { margin: 0 0 6px; font-size: clamp(18px, 5vw, 24px); font-weight: 600; letter-spacing: -0.3px; word-wrap: break-word; }
-        .song-modal .song-artist { margin: 0 0 24px; color: var(--text-secondary); font-size: 15px; }
+        .song-modal h2 { margin: 0 0 6px; font-size: clamp(17px, 5vw, 23px); font-weight: 600; letter-spacing: -0.3px; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+        .song-modal .song-artist { margin: 0 0 22px; color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; }
 
         .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
         .modal-cancel {
@@ -358,12 +391,12 @@
         .toast-container {
             position: fixed;
             left: 50%;
-            bottom: calc(24px + env(safe-area-inset-bottom));
+            bottom: calc(16px + env(safe-area-inset-bottom));
             transform: translateX(-50%);
             z-index: 6000;
             display: grid;
             gap: 8px;
-            width: min(92vw, 480px);
+            width: min(94vw, 480px);
             pointer-events: none;
         }
 
@@ -392,11 +425,75 @@
 
         .hidden { display: none !important; }
 
+        /* ============ MOBILE DESIGN SYSTEM (ALL ANDROID) ============ */
+
+        /* Phones — portrait */
         @media (max-width: 480px) {
+            :root {
+                --page-x: 10px;
+                --page-y: 10px;
+            }
+
             .search-actions { grid-template-columns: 1fr; }
             .modal-actions { grid-template-columns: 1fr; }
-            .search-row { flex-direction: column; }
-            .search-mode-toggle { align-self: stretch; justify-content: center; }
+            .remote-header { margin-bottom: 14px; }
+            .song-list::-webkit-scrollbar { width: 0; height: 0; }
+            .toast-container { width: calc(100vw - 24px); }
+            .toast { font-size: 13.5px; }
+        }
+
+        /* Tiny phones (320 - 360px) */
+        @media (max-width: 360px) {
+            h1 { font-size: clamp(1.35rem, 7.5vw, 1.6rem); }
+            .player-pill { padding: 8px 14px; font-size: 13px; gap: 8px; }
+            button { font-size: 14px; padding: 10px 16px; }
+            .search-input-wrapper input, .song-filter { padding: 11px 14px; }
+            .song-row { gap: 10px; padding: 9px 11px; }
+            .song-row .num { min-width: 42px; height: 34px; font-size: 13px; border-radius: 10px; }
+            .song-row .meta .title { font-size: 13px; }
+            .song-row .meta .artist { font-size: 11.5px; }
+            .song-list { max-height: min(50dvh, 420px); }
+            .pair-card p { font-size: 13px; }
+        }
+
+        /* Wide phones, tablets, desktop */
+        @media (min-width: 600px) {
+            body { --page-x: clamp(16px, 4vw, 24px); }
+            .song-list { gap: 10px; max-height: min(52dvh, 640px); }
+        }
+
+        /* Short landscape screens (phones + small tablets) */
+        @media (max-height: 520px) and (orientation: landscape) {
+            :root {
+                --page-y: 8px;
+                --page-x: 14px;
+                --card-pad: 12px 14px;
+                --stack-gap: 10px;
+            }
+
+            h1 { font-size: clamp(1.2rem, 4vw, 1.6rem); margin-bottom: 6px; }
+            .remote-header { margin-bottom: 10px; }
+            .player-pill { padding: 6px 12px; font-size: 12px; gap: 7px; }
+            .card-label { margin-bottom: 8px; }
+            .search-input-wrapper input, .song-filter { padding: 9px 14px; }
+            button { min-height: 42px; padding: 8px 16px; font-size: 13px; }
+            .song-list { max-height: min(50dvh, 380px); }
+            .song-modal { max-height: calc(100dvh - 24px); }
+            .song-modal h2 { font-size: clamp(16px, 4.5vw, 20px); }
+            .song-modal .song-artist { font-size: 13px; }
+        }
+
+        /* Touch-only: no sticky hover state */
+        @media (hover: none) {
+            .song-row:hover { border-color: var(--glass-border); background: var(--glass-light); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
@@ -414,7 +511,7 @@
         <h2>Not paired with a player</h2>
         <p>Scan the QR code on the Karaoke Player screen, or paste a Player ID below (tap the <b>P-XXXXXX</b> badge on the player to copy it).</p>
         <div style="display:flex; gap:10px; max-width:420px; margin:0 auto 14px;">
-            <input id="pairingId" class="song-filter" type="text" placeholder="Paste player ID (rk_player_...)" style="margin:0;" autocomplete="off">
+            <input id="pairingId" class="song-filter" type="text" placeholder="Paste player ID (rk_player_...)" style="margin:0;" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
         </div>
         <div class="search-actions">
             <button onclick="tryPair()">Pair</button>
@@ -428,24 +525,20 @@
             <p class="card-label">Quick Search</p>
             <div class="search-row">
                 <div class="search-input-wrapper">
-                    <input type="text" id="quickSearchInput" placeholder="Title, artist, or YouTube link..." autocomplete="off" aria-label="Quick song search">
-                </div>
-                <div class="search-mode-toggle" role="tablist" aria-label="Search mode">
-                    <button id="textModeBtn" class="active" onclick="setMode('text')">Text</button>
-                    <button id="numberModeBtn" onclick="setMode('number')">#</button>
+                    <input type="text" id="quickSearchInput" placeholder="Search the title songs..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-label="Quick song search">
                 </div>
             </div>
             <div class="search-actions">
-                <button id="quickPlayBtn" onclick="quickAction(true)">▶ Play Now</button>
-                <button id="quickReserveBtn" class="reserve" onclick="quickAction(false)">Reserve</button>
+                <button id="quickPlayBtn" onclick="quickText(true)">▶ Play Now</button>
+                <button id="quickReserveBtn" class="reserve" onclick="quickText(false)">Reserve</button>
             </div>
-            <p id="quickHint" class="hint-text">Search by title/artist. The song is sent straight to the paired player.</p>
+            <p id="quickHint" class="hint-text">Not in the songbook? Search by title/artist for best results.</p>
         </section>
 
         <!-- Songbook -->
         <section class="glass-card">
             <p class="card-label">Songbook</p>
-            <input type="text" id="songFilter" class="song-filter" placeholder="🔍 Filter title or artist..." oninput="filterSongs()" aria-label="Filter songbook">
+            <input type="text" id="songFilter" class="song-filter" placeholder="🔍 Filter title or artist..." oninput="filterSongs()" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Filter songbook">
             <p class="hint-text" style="margin:0 0 12px;">Tap a song to play or reserve it.</p>
             <div id="songList" class="song-list"></div>
             <p id="songEmpty" class="empty-state">(No songs loaded)</p>
@@ -486,7 +579,6 @@
 
         let allSongsData = [];
         let currentSong = null;          // { code, title, artist }
-        let searchMode = 'text';
         let playerId = null;
         let wakeLock = null;
         let presenceTimer = null;
@@ -645,28 +737,6 @@
         // ---------------------------------------------------------------
         // Quick search (mirrors index.html sidebar logic)
         // ---------------------------------------------------------------
-        function setMode(mode) {
-            searchMode = mode;
-            document.getElementById('textModeBtn').classList.toggle('active', mode === 'text');
-            document.getElementById('numberModeBtn').classList.toggle('active', mode === 'number');
-            const input = document.getElementById('quickSearchInput');
-            input.value = '';
-            input.placeholder = mode === 'number' ? 'Enter songbook number...' : 'Title, artist, or YouTube link...';
-            document.getElementById('quickHint').innerText = mode === 'number'
-                ? 'Type a songbook number — e.g. 42 — then Play Now or Reserve.'
-                : 'Search by title/artist. The song is sent straight to the paired player.';
-        }
-
-        async function quickAction(playNow) {
-            if (!playerId) {
-                showToast('Not paired with a player', 'error', 'Scan the QR code on the player screen.');
-                document.getElementById('pairCard').classList.remove('hidden');
-                return;
-            }
-            if (searchMode === 'number') await quickNumber(playNow);
-            else await quickText(playNow);
-        }
-
         function extractVideoId(query) {
             try {
                 const url = new URL(query);
@@ -788,37 +858,6 @@
             } catch (err) {
                 console.error('Quick text search error:', err);
                 showToast('Search failed', 'error', 'Check your connection and try again.');
-            } finally {
-                setQuickLoading(false, btn, original);
-            }
-        }
-
-        async function quickNumber(playNow) {
-            const input = document.getElementById('quickSearchInput');
-            const code = input.value.trim();
-            if (!code) return;
-
-            const btn = playNow ? document.getElementById('quickPlayBtn') : document.getElementById('quickReserveBtn');
-            const original = btn.innerText;
-            setQuickLoading(true, btn);
-
-            try {
-                const res = await fetch(CONFIG.CACHE_ENDPOINT + '?id=' + encodeURIComponent(code));
-                if (res.status === 404 || res.status === 204) {
-                    showToast('Song number ' + code + ' is not listed in the songbook.', 'error');
-                    return;
-                }
-                if (!res.ok) throw new Error('Database connection error');
-                const data = await res.json();
-                if (!data.videoId) {
-                    showToast('Song number not found', 'error');
-                    return;
-                }
-                input.value = '';
-                await sendCommand({ action: playNow ? 'play' : 'reserve', songCode: code, videoTitle: data.videoTitle || '' });
-            } catch (err) {
-                console.error('Number lookup error:', err);
-                showToast('Error connecting to database', 'error');
             } finally {
                 setQuickLoading(false, btn, original);
             }
@@ -958,7 +997,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !document.getElementById('remoteApp').classList.contains('hidden')) {
                 const active = document.activeElement;
-                if (active && active.id === 'quickSearchInput') quickAction(true);
+                if (active && active.id === 'quickSearchInput') quickText(true);
             }
             if (e.key === 'Escape') closeSongModal();
         });
