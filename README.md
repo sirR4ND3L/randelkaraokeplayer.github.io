@@ -27,10 +27,9 @@ A premium, modern web-based Karaoke player designed with a sleek **Glassmorphism
 ## 🚀 Getting Started
 
 ### Prerequisites
-To use the search functionality reliably, it is recommended to add your own **YouTube Data API v3 Key** in the code:
-1. Open `app.js`.
-2. Find the constant `YOUTUBE_API_KEY`.
-3. Replace the placeholder with your key.
+YouTube search runs through the backend proxy at `https://karaoke-backend-topaz.vercel.app/api/youtube-search`. No key is needed in this repo:
+1. Set the `YOUTUBE_API_KEY` environment variable in the backend (Vercel Dashboard -> Settings -> Environment Variables) for Production and Preview.
+2. Create the key in the **Google Cloud Console** (YouTube Data API v3) and restrict it to that API only.
 
 ### Installation
 The project is built entirely with frontend technologies.
@@ -46,9 +45,7 @@ The project is built entirely with frontend technologies.
 - **Canvas API:** High-performance real-time audio visualization.
 
 ## 🔐 Security & Protection
-The application is designed to be hosted on static platforms like **GitHub Pages**. To protect your API key:
-- Use **HTTP Referrer restrictions** in the Google Cloud Console.
-- Restrict the key to only work on your specific `*.github.io` domain.
+The API key is never exposed to the browser — it lives only in the backend's Vercel environment variables. Client-side risks are further reduced by validating POST payloads before writes.
 
 ## 📜 License
 This project is open-source and available under the [MIT License](LICENSE).

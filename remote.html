@@ -641,7 +641,7 @@
             SUPABASE_URL: 'https://blbwxnbbdsqkxbuvcrtn.supabase.co',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18',
             CACHE_ENDPOINT: 'https://karaoke-backend-topaz.vercel.app/api/karaoke-cache',
-            YOUTUBE_API_KEY: 'AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI',
+            YOUTUBE_SEARCH_ENDPOINT: 'https://karaoke-backend-topaz.vercel.app/api/youtube-search',
             PREFERRED_CHANNELS: [
                 'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
                 'UCNbFgUCJj2Ls6LVzBbL8fqA', // KARAOKETV
@@ -1010,8 +1010,8 @@
         }
 
         async function fetchFromYouTubeAPI(query) {
-            const apiKey = CONFIG.YOUTUBE_API_KEY;
-            if (!apiKey) return null;
+            const endpoint = CONFIG.YOUTUBE_SEARCH_ENDPOINT;
+            if (!endpoint) return null;
 
             const isRelevant = (resultTitle, originalQuery) => {
                 const doc = new DOMParser().parseFromString(resultTitle, 'text/html');
@@ -1041,24 +1041,22 @@
 
             for (const channelId of CONFIG.PREFERRED_CHANNELS) {
                 try {
-                    const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=' +
-                        encodeURIComponent(query) + '&type=video&videoEmbeddable=true&channelId=' + channelId + '&key=' + apiKey;
+                    const url = endpoint + '?q=' + encodeURIComponent(query) + '&channelId=' + channelId;
                     const res = await fetch(url);
                     const data = await res.json();
-                    const item = data.items && data.items.find(it => isRelevant(it.snippet.title, query));
-                    if (item) return { id: item.id.videoId, title: item.snippet.title };
+                    const item = data.items && data.items.find(it => isRelevant(it.title, query));
+                    if (item) return { id: item.id, title: item.title };
                 } catch (err) {
                     console.error('Preferred channel search error:', err);
                 }
             }
 
             try {
-                const globalUrl = 'https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=' +
-                    encodeURIComponent(query) + '&type=video&videoEmbeddable=true&key=' + apiKey;
+                const globalUrl = endpoint + '?q=' + encodeURIComponent(query);
                 const res = await fetch(globalUrl);
                 const data = await res.json();
-                const item = data.items && data.items.find(it => isRelevant(it.snippet.title, query));
-                if (item) return { id: item.id.videoId, title: item.snippet.title };
+                const item = data.items && data.items.find(it => isRelevant(it.title, query));
+                if (item) return { id: item.id, title: item.title };
             } catch (e) {
                 return null;
             }

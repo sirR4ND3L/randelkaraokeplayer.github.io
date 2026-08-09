@@ -7,9 +7,7 @@ const KaraokeApp = {
     // Stores API keys, endpoints, and asset paths used throughout the app.
     CONFIG: {
         APP_TITLE: "Randel Karaoke Player",
-        YOUTUBE_API_KEY: [ 
-            'AIzaSyBthjxnP2yj4_3tLVFhVHqRi7TwP2_jUlI'
-        ],
+        YOUTUBE_SEARCH_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/youtube-search",
         CACHE_ENDPOINT: "https://karaoke-backend-topaz.vercel.app/api/karaoke-cache",
         SUPABASE_URL: "https://blbwxnbbdsqkxbuvcrtn.supabase.co",
         SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18",
@@ -324,10 +322,10 @@ const KaraokeApp = {
         }
     },
 
-    // Primary search fallback using the official YouTube Data API.
+    // Primary search fallback using the backend YouTube search proxy.
     async fetchFromYouTubeAPI(query) {
-        const apiKey = Array.isArray(this.CONFIG.YOUTUBE_API_KEY) ? this.CONFIG.YOUTUBE_API_KEY[0] : this.CONFIG.YOUTUBE_API_KEY;
-        if (!apiKey) return null;
+        const endpoint = this.CONFIG.YOUTUBE_SEARCH_ENDPOINT;
+        if (!endpoint) return null;
 
         // Helper function to check if the result title is actually relevant
         const isRelevant = (resultTitle, originalQuery) => {
@@ -375,18 +373,18 @@ const KaraokeApp = {
         // 1. Preferred Channels Loop
         for (const channelId of this.CONFIG.PREFERRED_CHANNELS) {
             console.log('Searching in preferred channel:', channelId);
-            const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&channelId=${channelId}&key=${apiKey}`;
+            const url = `${endpoint}?q=${encodeURIComponent(query)}&channelId=${channelId}`;
         
             try {
                 const res = await fetch(url);
                 const data = await res.json();
                 
                 // Find the first item that actually matches our criteria
-                const item = data.items?.find(it => isRelevant(it.snippet.title, query));
+                const item = data.items?.find(it => isRelevant(it.title, query));
 
                 if (item) {
                     console.log(`✅ Found in preferred channel: ${channelId}`);
-                    return { id: item.id.videoId, title: item.snippet.title };
+                    return { id: item.id, title: item.title };
                 }
             } catch (err) {
                 console.error(`❌Song not found in preferred channel: ${channelId}❗${err.message}`);
@@ -394,16 +392,16 @@ const KaraokeApp = {
         }
 
         console.log("🔍 Not in preferred channels. Searching globally...");
-        const globalUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&key=${apiKey}`;
+        const globalUrl = `${endpoint}?q=${encodeURIComponent(query)}`;
 
         try {
             const res = await fetch(globalUrl);
             const data = await res.json();
             
-            const item = data.items?.find(it => isRelevant(it.snippet.title, query));
+            const item = data.items?.find(it => isRelevant(it.title, query));
 
             if (item) {
-                return { id: item.id.videoId, title: item.snippet.title};
+                return { id: item.id, title: item.title};
             }
         } catch { return null; }
 
