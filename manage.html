@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Karaoke | Song Management</title>
+    <title>Karaoke | Song Management System</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <link rel="shortcut icon" href="images/favicon-32x32.png" type="image/png">
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="admin-page">
-    <h1>Karaoke Song Management</h1>
+    <h1>Karaoke Song Management System</h1>
     <h3 style="text-align: center; color: rgb(159, 209, 250);">Total Songs: <span id="totalSongs" style="color: rgb(103, 252, 83);">0</span></h3>
-    <div style="max-width: 600px; margin: 0 auto 20px; display: flex; gap: 10px;">
+    <div class="admin-search" style="max-width: 600px; margin: 0 auto 20px; display: flex; gap: 10px;">
         <input type="text" id="searchInput" placeholder="Search by title, artist, or number..." oninput="debouncedLoad()" style="margin-bottom: 0;">
         <button onclick="loadSongs()" style="width: auto; white-space: nowrap; padding: 0 25px;">Search</button>
     </div>
