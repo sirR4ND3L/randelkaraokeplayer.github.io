@@ -31,7 +31,8 @@ const KaraokeApp = {
         PREFERRED_CHANNELS: [
             'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
             'UCNbFgUCJj2Ls6LVzBbL8fqA', // KARAOKETV
-            'UCjpmz7p9aFNuHP_AuQDxYRw' //HARANA KARAOKE
+            'UCjpmz7p9aFNuHP_AuQDxYRw', //HARANA KARAOKE
+            'UCLibmOHbJSf1EAke-seSp8A' //Global karaoke tv
         ]
     },
 
