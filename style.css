@@ -1602,3 +1602,115 @@ button.cancel-btn:hover {
     .score-actions button { width: 100%; }
     .live-score-badge .value { font-size: 14px; }
 }
+
+/* =========================================================================
+   KARAOKE SONG MANAGEMENT (ADMIN) - manage.html
+   All rules scoped to body.admin-page so the player page is unaffected.
+   ========================================================================= */
+
+body.admin-page {
+    display: block;
+    overflow-y: auto;
+    padding: 40px;
+    margin: 0;
+    color: #f8fafc;
+    background: radial-gradient(circle at top right, #1e293b, #0f172a);
+}
+
+body.admin-page h1 { text-align: center; margin-bottom: 30px; letter-spacing: -1px; }
+
+body.admin-page input {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 12px;
+    border-radius: 12px;
+    width: 100%;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+
+body.admin-page input::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+body.admin-page button {
+    background: #38bdf8;
+    color: #0f172a;
+    border: none;
+    padding: 12px;
+    border-radius: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.2s;
+}
+
+body.admin-page button:hover { opacity: 0.9; transform: none; }
+
+/* Glass Cards */
+body.admin-page .song-card {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 25px;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    min-height: 250px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, background 0.3s;
+}
+
+body.admin-page .song-card:hover {
+    background: rgba(51, 65, 85, 0.7);
+    transform: translateY(-5px);
+}
+
+body.admin-page .song-card .button-row {
+    margin-top: auto;
+    display: flex;
+    gap: 8px;
+}
+
+body.admin-page .song-card .button-row button { flex: 1; }
+
+body.admin-page #songContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
+    padding: 20px;
+    align-items: start;
+}
+
+body.admin-page .verified { border-left: 6px solid #22c55e; }
+
+/* Action Buttons */
+body.admin-page .action-buttons { display: flex; justify-content: center; gap: 15px; }
+body.admin-page .saveAllSong { background: #22c55e !important; color: white !important; }
+body.admin-page .reEditSong { background: #475569 !important; color: white !important; }
+body.admin-page .deleteSong { background: #dc3545 !important; color: white !important; }
+
+/* Modal Styles (dark admin look on manage.html only) */
+body.admin-page .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+body.admin-page .modal-content {
+    background: #1e293b;
+    padding: 30px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+}
