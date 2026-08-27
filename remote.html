@@ -566,15 +566,10 @@
     <!-- Pairing screen when opened without a player id -->
     <section id="pairCard" class="pair-card hidden">
         <h2>Not paired with a player</h2>
-        <p>Scan the QR code on the Karaoke Player screen, or paste a Player ID below (tap the <b>P-XXXXXX</b> badge on the player to copy it).</p>
-        <div style="display:flex; gap:10px; max-width:420px; margin:0 auto 14px;">
-            <input id="pairingId" class="song-filter" type="text" placeholder="Paste player ID (rk_player_...)" style="margin:0;" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+        <p>Scan the QR code shown on the Karaoke Player screen to connect.</p>
+        <div class="search-actions" style="grid-template-columns:1fr;">
+            <button id="scanBtn" onclick="openScanner()">📷 Scan Player QR</button>
         </div>
-        <div class="search-actions">
-            <button onclick="tryPair()">Pair</button>
-            <button id="scanBtn" class="reserve" onclick="openScanner()">📷 Scan Player QR</button>
-        </div>
-        <p class="hint-text" style="text-align:center;">Tip: open the player tab and click its <b>P-XXXXXX</b> badge to copy the full ID, or scan its QR code.</p>
     </section>
 
     <div id="remoteApp" class="remote-stack hidden">
@@ -686,20 +681,6 @@
             loadSongbook();
         }
 
-        function tryPair() {
-            const input = document.getElementById('pairingId').value.trim();
-            if (!input) {
-                showToast('Paste a player ID first', 'error');
-                return;
-            }
-            if (/^p-?\w{4,8}$/i.test(input)) {
-                showToast("That's the short badge, not the ID", 'error',
-                    'Tap the P-XXXXXX badge on the player to copy the full rk_player_... ID, then paste that.');
-                return;
-            }
-            connect(input.toLowerCase());
-        }
-
         function setupPlayerBadge(pid) {
             const shortId = 'P-' + pid.slice(-6).toUpperCase();
             const badge = document.getElementById('playerIdBadge');
@@ -748,7 +729,7 @@
             setScannerStatus('Starting camera...');
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setScannerStatus('Camera not supported here — paste the ID below instead.');
+                setScannerStatus('Camera not supported on this device.');
                 return;
             }
 
@@ -777,7 +758,7 @@
 
                 const ok = await loadJsQR();
                 if (!ok) {
-                    setScannerStatus('QR detection unavailable — paste the ID below instead.');
+                    setScannerStatus('QR detection unavailable on this device.');
                     return;
                 }
                 scanCanvas = document.createElement('canvas');
@@ -785,8 +766,8 @@
             } catch (err) {
                 console.error('Scanner start error:', err);
                 setScannerStatus(err && err.name === 'NotAllowedError'
-                    ? 'Camera access denied — allow the camera in Chrome settings, or paste the ID below.'
-                    : 'Could not start the camera. Paste the ID below instead.');
+                    ? 'Camera access denied — allow the camera in your browser settings and try again.'
+                    : 'Could not start the camera. Please try again.');
             }
         }
 
