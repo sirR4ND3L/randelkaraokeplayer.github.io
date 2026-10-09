@@ -77,6 +77,33 @@ if (typeof videoTitle !== 'string' || videoTitle.length > 200) {
 - [ ] **Google Cloud Console** -> create NEW YouTube Data API v3 key; restrict to that API only
 - [ ] **Supabase** -> confirm RLS enabled + policies for `online_players`, `remote_commands`, `karaoke_search_cache`
 
+### Known gap: `karaoke_search_cache` has no DELETE policy for `anon`
+
+Verified against the live table on 2026-10-10: `SELECT`, `INSERT` and `UPDATE` all
+succeed with the anon key, but `DELETE` matches **0 rows** and still answers
+HTTP 204. Because a policy-filtered delete looks exactly like a successful one,
+`manage.html`'s Delete button appeared to work and the song reappeared on reload.
+
+Run this once in the Supabase SQL editor, then reload `manage.html`:
+
+```sql
+-- 1. Remove the throwaway row left behind while diagnosing the above
+delete from public.karaoke_search_cache where search_query = 'zzdeletecheckzz';
+
+-- 2. Give the anon role the DELETE access the admin UI needs
+grant delete on public.karaoke_search_cache to anon;
+
+drop policy if exists "anon_delete_karaoke_search_cache" on public.karaoke_search_cache;
+create policy "anon_delete_karaoke_search_cache"
+    on public.karaoke_search_cache
+    for delete to anon
+    using (true);
+```
+
+`manage.html` now asks for the affected rows back (`.select('id')`) and reports a
+clear error when zero rows come back, so this class of silent failure can never
+masquerade as success again.
+
 ## 5. Notes
 
 - Old YouTube key stays in git history -> rotation is mandatory

@@ -34,6 +34,7 @@ const KaraokeApp = {
             'UCjpmz7p9aFNuHP_AuQDxYRw', //HARANA KARAOKE
             'UCLibmOHbJSf1EAke-seSp8A' //Global karaoke tv
         ],
+        BACKGROUND_VIDEO: 'backgroundVideo/bgv.mp4',
 
         // --- Scoring model ---
         // Tuned to be forgiving: simply singing audibly already earns a solid
@@ -87,6 +88,7 @@ const KaraokeApp = {
         commandPollInterval: null,
         songEnded: false,
         remoteWarned: false,
+        bgvReady: false,
         searchIdleLabel: { play: null, reserve: null },
         searchFeedbackTimers: {}
     },
@@ -102,6 +104,7 @@ const KaraokeApp = {
         this.cacheElements();
         this.initSearchButtonLabels();
         this.initPlayerBadge();
+        this.initBackgroundVideo();
         // parseURLParams must run before loadYouTubeAPI so a ?code= deep link is
         // already queued when the player fires onReady.
         this.parseURLParams();
@@ -135,7 +138,7 @@ const KaraokeApp = {
             'finalRank', 'finalMessage', 'micPulseIndicator',
             'sidebarSearchInput', 'sidebarPlayBtn', 'sidebarReserveBtn', 'sidebarToggleSearchBtn',
             'sidebarQrCode', 'playPauseBtn', 'playerIdBadge',
-            'alertTitle', 'alertMessage', 'customAlert'
+            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
     },
@@ -175,6 +178,7 @@ const KaraokeApp = {
     onPlayerReady() {
         this.startSync();
         this.state.player.setVolume(100);
+        this.syncBackgroundVideo();
 
         // If the page was opened from the songbook (?code=X&play=Y), start that song now
         if (this.state.pendingSongbook) {
@@ -186,6 +190,9 @@ const KaraokeApp = {
 
     // Handles logic for when a song ends or is paused.
     onPlayerStateChange(event) {
+        // Every state transition can move the player in or out of "a karaoke
+        // video is loaded", which is what decides the idle background loop.
+        this.syncBackgroundVideo();
         if (event.data === YT.PlayerState.ENDED) {
             this.handleSongEnded();
         }
@@ -503,6 +510,7 @@ const KaraokeApp = {
 
         if (playNow && !isSongActive) {
             this.prepareForNewSong();
+            this.hideBackgroundVideo();
             this.state.player.loadVideoById(id);
             this.updateNowPlayingUI(song.title);
         } else {
@@ -523,12 +531,15 @@ const KaraokeApp = {
         this.prepareForNewSong();
         if (this.state.songQueue.length > 0) {
             const nextSong = this.state.songQueue.shift();
+            this.hideBackgroundVideo();
             this.state.player.loadVideoById(nextSong.id);
             this.updateNowPlayingUI(nextSong.title);
             this.updateQueueUI();
         } else {
             this.state.player.stopVideo();
             this.updateNowPlayingUI("");
+            // Nothing left to play: hand the stage back to the idle loop.
+            this.syncBackgroundVideo();
         }
     },
 
@@ -1062,6 +1073,97 @@ this.elements.scoreBarFill.style.width = display + "%";
             audio.volume = 0.3; // Moderate volume for typing feedback
             audio.play().catch(() => {});
         }
+    },
+
+    // --- 8.5 Idle Background Video ---
+    // Plays a local looping video whenever the YouTube player has no karaoke
+    // video loaded, so the stage never sits on an empty black screen.
+
+    initBackgroundVideo() {
+        const bgv = this.elements.bgvPlayer;
+        if (!bgv) return;
+
+        // The mute flag must be set through the property as well as the markup:
+        // browsers only grant un-gesture'd autoplay when the element reports
+        // itself as muted at play() time.
+        bgv.muted = true;
+        bgv.loop = true;
+        bgv.playsInline = true;
+        // Single source of truth: the path lives in CONFIG, not in the markup.
+        bgv.src = this.CONFIG.BACKGROUND_VIDEO;
+
+        bgv.addEventListener('canplay', () => {
+            this.state.bgvReady = true;
+            this.syncBackgroundVideo();
+        }, { once: true });
+
+        bgv.addEventListener('error', () => {
+            console.warn("Background video unavailable:", this.CONFIG.BACKGROUND_VIDEO);
+        });
+
+        // Some browsers still refuse the very first play() and only allow it
+        // after a gesture, so retry once the user touches the page or a key.
+        const retry = () => this.syncBackgroundVideo();
+        document.addEventListener('pointerdown', retry, { once: true });
+        document.addEventListener('keydown', retry, { once: true });
+
+        this.syncBackgroundVideo();
+    },
+
+    // True when the YouTube player is showing (or about to show) a karaoke
+    // video. PLAYING/BUFFERING are obvious; PAUSED/CUED still paint a frame or
+    // thumbnail, so the idle loop must stay out of the way for those too.
+    isKaraokeActive() {
+        const player = this.state.player;
+        if (!player || typeof player.getPlayerState !== 'function') return false;
+
+        const playerState = player.getPlayerState();
+        if (playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING) return true;
+        if (playerState === YT.PlayerState.PAUSED || playerState === YT.PlayerState.CUED) {
+            const data = typeof player.getVideoData === 'function' ? player.getVideoData() : null;
+            return !!(data && data.video_id);
+        }
+        return false;
+    },
+
+    // Single decision point for the background loop: shown when idle, hidden
+    // and paused the moment a song takes over.
+    syncBackgroundVideo() {
+        if (this.isKaraokeActive()) this.hideBackgroundVideo();
+        else this.showBackgroundVideo();
+    },
+
+    showBackgroundVideo() {
+        const bgv = this.elements.bgvPlayer;
+        if (!bgv) return;
+
+        this.setBackgroundVideoVisible(true);
+        // Wait until there is something to paint, otherwise the freshly revealed
+        // layer flashes black over the welcome screen.
+        if (!this.state.bgvReady) return;
+
+        const attempt = bgv.play();
+        if (attempt && typeof attempt.catch === 'function') {
+            // Autoplay refused (no gesture yet): hide the layer so no black frame
+            // is left on screen. bgvReady stays true, so the next state change or
+            // the first user gesture retries the play and the loop appears.
+            attempt.catch(() => this.setBackgroundVideoVisible(false));
+        }
+    },
+
+    hideBackgroundVideo() {
+        const bgv = this.elements.bgvPlayer;
+        if (!bgv) return;
+        this.setBackgroundVideoVisible(false);
+        bgv.pause();
+    },
+
+    setBackgroundVideoVisible(visible) {
+        const bgv = this.elements.bgvPlayer;
+        const container = this.elements.videoContainer;
+        if (!bgv) return;
+        bgv.classList.toggle('active', visible);
+        if (container) container.classList.toggle('bgv-active', visible);
     },
 
     // Closes the score overlay and resumes the app flow.

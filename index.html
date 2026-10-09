@@ -90,7 +90,10 @@
         <div class="left-panel">
             <div class="video-container" id="videoContainer">
                 <div id="player"></div>
-                
+
+                <video id="bgvPlayer" muted loop playsinline autoplay preload="auto"
+                    aria-hidden="true" tabindex="-1" disablepictureinpicture></video>
+
                 <div id="scoreOverlay" class="score-overlay">
                     <div class="score-rank" id="finalRank">Rockstar</div>
                     <div class="score-number" id="finalScore">85</div>

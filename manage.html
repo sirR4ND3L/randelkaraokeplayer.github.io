@@ -19,6 +19,18 @@
         <button class="saveAllSong" onclick="saveAllUnverified()" style="margin-bottom: 20px; padding: 10px; background-color: #22c55e; color: white; border: none; border-radius: 50px; width: auto; margin: 5px; cursor: pointer;">Save All Unverified</button>
         <button class="reEditSong" onclick="reEditAllSongs()" style="margin-bottom: 20px; padding: 10px; border: none; border-radius: 50px; width: auto; margin: 5px; cursor: pointer">Re-edit All Songs</button>
     </div>
+    <details class="add-song-panel" id="addSongPanel">
+        <summary>➕ Add Song Manually</summary>
+        <div class="add-song-grid">
+            <input type="text" id="newSongTitle" placeholder="Title (e.g. Perfect)" autocomplete="off">
+            <input type="text" id="newSongArtist" placeholder="Artist (e.g. Ed Sheeran)" autocomplete="off">
+            <input type="text" id="newSongVideo" placeholder="YouTube URL or Video ID" autocomplete="off">
+            <input type="number" id="newSongNumber" placeholder="Number" min="1" step="1" autocomplete="off">
+            <input type="text" id="newSongQuery" class="span-all" placeholder="Search key (optional) - leave empty to build it from the title" autocomplete="off">
+            <button id="addSongBtn" onclick="addSongManually()">Add to Songbook</button>
+        </div>
+        <p class="add-song-hint" id="addSongHint">Leave the number empty to append at the end of the songbook.</p>
+    </details>
     <div id="songContainer">Loading...</div>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
