@@ -20,11 +20,11 @@ Every 200ms the app takes one sample of the microphone:
 3. **Is a note trackable?** A detectable pitch earns a bonus; untrackable noise is penalised.
 4. **How steady?** Frame-to-frame pitch movement is tracked in *cents* with a smoothed moving average, so an expressive melody and natural vibrato are not punished while an untrackable pitch still loses ground.
 
-Those points feed a **rolling meter**, not a cumulative average: the displayed score follows how the singer is doing *right now*, rising gradually and drifting down more slowly. Reaching 80 takes roughly 20 seconds of continuous, loud, on-pitch singing and has to be sustained to be kept. The **final score is the peak the singer actually held**, so a quiet outro or a soft last line cannot erase a strong performance.
+Those points feed a **rolling meter**, not a cumulative average: the displayed score follows how the singer is doing *right now*, rising as the phrases land and drifting down more slowly. Simply singing audibly earns a solid score, so volume, a trackable pitch and steadiness are bonuses rather than gates. The **final score is the peak the singer actually held**, so a quiet outro or a soft last line cannot erase a strong performance.
 
-Typical results: soft singing ≈ 60, ordinary singing ≈ 69, loud and steady ≈ 81. All thresholds live in the `SCORING` block of `CONFIG` in `app.js` and can be retuned without touching the scoring logic.
+Typical results: soft singing ≈ 77, ordinary singing ≈ 84, loud and steady ≈ 90+. All thresholds live in the `SCORING` block of `CONFIG` in `app.js` and can be retuned without touching the scoring logic.
 
-Pitch is detected by autocorrelation over the vocal range only (60–1200Hz), with a half-period correction so smooth voices are not reported an octave too high.
+Pitch is detected by autocorrelation over the vocal range only (60–1200Hz), with a half-period correction so smooth voices are not reported an octave too high. The microphone is captured with browser auto-gain disabled, so the level stays under the singer's control instead of being pumped up and down between phrases.
 
 - **🎉 Custom Score Sounds:** Plays celebration or feedback sounds (`scoreSound.mp3`) when a song ends.
 - **📋 Smart Queue System:** Add and manage songs with a beautiful "Up Next" card interface. The queue seamlessly auto-plays the next song the moment your score sound finishes.

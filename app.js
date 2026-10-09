@@ -36,21 +36,22 @@ const KaraokeApp = {
         ],
 
         // --- Scoring model ---
-        // Tuned so competent, steady singing lands in the 60-75 "Amateur/Pro"
-        // band and 80 has to be worked for: it takes a loud, on-key, consistent
-        // voice to get there, and it has to be sustained to stay there.
+        // Tuned to be forgiving: simply singing audibly already earns a solid
+        // score, and volume, pitch and steadiness are bonuses rather than gates.
+        // A steady everyday singer lands in the 70-85 "Pro/Rockstar" band, and
+        // 90+ is reserved for a loud, on-key, consistent voice held for a while.
         SCORING: {
-            VOICE_GATE: 3.0,        // energy below this is a rest, not a missed note
+            VOICE_GATE: 2.0,        // energy below this is a rest, not a missed note
             LOUDNESS_SPAN: 18,      // energy above the gate that earns full volume credit
-            VOICE_FLOOR: 0.5,       // credit for merely singing audibly
-            PITCH_MULT: 1.08,       // bonus multiplier for a trackable note
-            PITCHLESS_MULT: 0.70,   // penalty when no pitch can be detected at all
-            JITTER_SPAN: 400,       // cents of pitch movement treated as maximum instability
-            JITTER_SMOOTHING: 0.2,  // EMA weight: one sloppy moment must not crater the score
-            JITTER_FLOOR: 0.65,     // worst-case multiplier applied by instability
-            PERF_SMOOTHING: 0.12,   // how fast the meter chases current performance
-            RISE_RATE: 0.05,        // score climbs gradually, so gains feel earned
-            FALL_RATE: 0.02,        // ...and drifts down even more slowly
+            VOICE_FLOOR: 0.66,      // credit for merely singing audibly
+            PITCH_MULT: 1.10,       // bonus multiplier for a trackable note
+            PITCHLESS_MULT: 0.85,   // penalty when no pitch can be detected at all
+            JITTER_SPAN: 300,       // cents of pitch movement treated as maximum instability
+            JITTER_SMOOTHING: 0.18, // EMA weight: one sloppy moment must not crater the score
+            JITTER_FLOOR: 0.85,     // worst-case multiplier applied by instability
+            PERF_SMOOTHING: 0.15,   // how fast the meter chases current performance
+            RISE_RATE: 0.12,        // score climbs within a few good phrases
+            FALL_RATE: 0.05,        // ...and drifts down more slowly
             WARMUP_SAMPLES: 10,     // voiced samples discarded while the analyser settles
             MIN_PITCH_HZ: 60,       // widest vocal range accepted from the detector
             MAX_PITCH_HZ: 1200
@@ -654,10 +655,14 @@ const KaraokeApp = {
         }
 
         try {
-            // Disabling 'autoGainControl' prevents the browser from lowering your mic volume while you sing.
-            // We keep 'echoCancellation' enabled to help the app ignore the music from your speakers.
+            // 'autoGainControl' is switched off so the browser never auto-adjusts the
+            // mic volume mid-performance: AGC pumps the level up and down between
+            // phrases, which both distorts what the singer hears and makes the
+            // energy-based score swing for no real reason. 'echoCancellation' stays
+            // on so the app can ignore the music coming from the speakers.
             this.state.micStream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
+                    autoGainControl: false,
                     echoCancellation: true,
                     noiseSuppression: false
                 } 
@@ -823,10 +828,10 @@ const KaraokeApp = {
 
     // Determines label and color based on the numeric score.
     getRankData(score) {
-        if (score >= 95) return { rank: 'legendary', label: "Legendary", color: "#ffcc00", msg: "Masterpiece!" };
-        if (score >= 85) return { rank: 'rockstar', label: "Rockstar", color: "#007aff", msg: "Incredible!" };
-        if (score >= 70) return { rank: 'pro', label: "Pro", color: "#4cd964", msg: "Great job!" };
-        if (score >= 40) return { rank: 'amateur', label: "Amateur", color: "#ff9500", msg: "Not bad!" };
+        if (score >= 90) return { rank: 'legendary', label: "Legendary", color: "#ffcc00", msg: "Masterpiece!" };
+        if (score >= 78) return { rank: 'rockstar', label: "Rockstar", color: "#007aff", msg: "Incredible!" };
+        if (score >= 60) return { rank: 'pro', label: "Pro", color: "#4cd964", msg: "Great job!" };
+        if (score >= 35) return { rank: 'amateur', label: "Amateur", color: "#ff9500", msg: "Not bad!" };
         return { rank: 'beginner', label: "Beginner", color: "#ff3b30", msg: "Keep practicing!" };
     },
 
