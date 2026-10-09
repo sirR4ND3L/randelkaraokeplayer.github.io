@@ -530,24 +530,18 @@ iframe {
     display: none !important;
 }
 
-/* Fixed mic-status to isolate it from generic button styling */
+/* Mic toggle, styled to match the other player control bar buttons */
 button.mic-status {
-    position: absolute;
-    top: 24px;
-    right: 24px;
     font-size: 11px;
     font-weight: 600;
     color: var(--text-secondary);
-    background: rgba(0, 0, 0, 0.6);
-    padding: 8px 16px;
-    border-radius: 100px;
-    z-index: 10;
-    display: flex;
+    background: transparent;
+    padding: 10px 14px;
+    border-radius: 12px;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: var(--transition-smooth);
     text-transform: uppercase;
@@ -556,9 +550,9 @@ button.mic-status {
 }
 
 button.mic-status:hover {
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(255, 255, 255, 0.08);
     border-color: var(--accent-color);
-    transform: scale(1.05);
+    color: var(--text-primary);
 }
 
 button.mic-status.active {
@@ -568,8 +562,9 @@ button.mic-status.active {
 }
 
 #micPulseIndicator {
-    width: 15px;
-    height: 15px;
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
     background-color: transparent;
     border: 1px solid #4cd964;
     border-radius: 50%;
@@ -1050,46 +1045,6 @@ button.cancel-btn:hover {
     font-size: 11px;
 }
 
-/* Floating Live Score */
-.live-score-badge {
-    position: absolute;
-    top: 24px;
-    left: 24px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(0, 255, 204, 0.3);
-    padding: 8px 16px;
-    border-radius: 16px;
-    z-index: 10;
-    display: none;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 0 20px rgba(0, 255, 204, 0.15);
-    transition: var(--transition-smooth);
-    animation: scorePulse 2s infinite ease-in-out;
-}
-
-@keyframes scorePulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 255, 204, 0.15); }
-    50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(0, 255, 204, 0.3); }
-}
-
-.live-score-badge .label {
-    font-size: 10px;
-    font-weight: 800;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.live-score-badge .value {
-    font-size: 20px;
-    font-weight: 800;
-    color: #00ffcc;
-    font-variant-numeric: tabular-nums;
-}
-
 .score-meter-container {
     display: flex;
     align-items: center;
@@ -1199,21 +1154,6 @@ button.cancel-btn:hover {
 
 /* 1. Optimize Video HUD Overlays & Action Buttons on Mobile Screens */
 @media (max-width: 600px) {
-    button.mic-status {
-        top: 12px;
-        right: 12px;
-        font-size: 9px;
-        padding: 6px 12px;
-    }
-    .live-score-badge {
-        top: 12px;
-        left: 12px;
-        padding: 6px 12px;
-        border-radius: 12px;
-    }
-    .live-score-badge .value {
-        font-size: 16px;
-    }
     .score-meter-container {
         gap: 4px;
         margin-left: 6px;
@@ -1261,6 +1201,16 @@ button.cancel-btn:hover {
     }
     .pcb-center button span {
         display: none !important;
+    }
+    /* The pulse dot is the only mic feedback left once the label collapses,
+       so keep it visible as a small badge on the corner of the circle. */
+    .pcb-center button#audioStatus #micPulseIndicator {
+        display: block !important;
+        position: absolute !important;
+        top: 4px;
+        right: 4px;
+        width: 8px;
+        height: 8px;
     }
     .sidebar-search-actions {
         flex-direction: row;
@@ -1515,14 +1465,6 @@ button.cancel-btn:hover {
     top: 44px !important;
 }
 
-/* Push overlays down safely when the video container enters Full-Screen Mode */
-.video-container:fullscreen .mic-status,
-.video-container:fullscreen .live-score-badge,
-.video-container:-webkit-full-screen .mic-status,
-.video-container:-webkit-full-screen .live-score-badge {
-    top: 50px !important;
-}
-
 /* =========================================================================
    💎 GLASSMORPHIC QUALITY SELECTOR DROPDOWN
    ========================================================================= */
@@ -1600,7 +1542,6 @@ button.cancel-btn:hover {
     .button-row { gap: 6px !important; }
     .score-actions { flex-direction: column; width: 100%; gap: 6px; }
     .score-actions button { width: 100%; }
-    .live-score-badge .value { font-size: 14px; }
 }
 
 /* =========================================================================

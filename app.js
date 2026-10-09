@@ -130,8 +130,8 @@ const KaraokeApp = {
         const ids = [
             'nowPlaying', 'playerPlaceholder', 'dynamicIsland', 
             'queueList', 'videoContainer', 'audioStatus', 
-            'audioText', 'scoreMeter', 'liveScoreBadge', 'scoreBarFill', 
-            'liveScoreValue', 'liveScorePlayer', 'scoreOverlay', 'finalScore', 
+            'audioText', 'scoreMeter', 'scoreBarFill', 
+            'liveScoreValue', 'scoreOverlay', 'finalScore', 
             'finalRank', 'finalMessage', 'micPulseIndicator',
             'sidebarSearchInput', 'sidebarPlayBtn', 'sidebarReserveBtn', 'sidebarToggleSearchBtn',
             'sidebarQrCode', 'playPauseBtn', 'playerIdBadge',
@@ -631,7 +631,7 @@ const KaraokeApp = {
     // Handles microphone access, real-time pitch detection, and score calculation.
 
     async toggleVisualizer() {
-        const { audioStatus, audioText, scoreMeter, liveScoreBadge, micPulseIndicator } = this.elements;
+        const { audioStatus, audioText, scoreMeter, micPulseIndicator } = this.elements;
 
         if (this.state.isMicActive) {
             this.stopScoring();
@@ -649,7 +649,7 @@ const KaraokeApp = {
             
             audioStatus.classList.remove('active');
             audioText.innerText = "Mic: Off";
-            [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "none");
+            scoreMeter.style.display = "none";
             micPulseIndicator.style.display = 'none';
             return;
         }
@@ -690,7 +690,7 @@ const KaraokeApp = {
 
             audioStatus.classList.add('active');
             audioText.innerText = "Mic: On";
-            [scoreMeter, liveScoreBadge].forEach(el => el.style.display = "flex");
+            scoreMeter.style.display = "flex";
             
             this.startScoring();
             this.runPulseAnimation();
@@ -798,9 +798,8 @@ const KaraokeApp = {
         this.state.peakScore = Math.max(this.state.peakScore, this.state.currentScore);
 
         const display = Math.min(Math.floor(this.state.currentScore), 100);
-        this.elements.scoreBarFill.style.width = display + "%";
+this.elements.scoreBarFill.style.width = display + "%";
         this.elements.liveScoreValue.innerText = display;
-        this.elements.liveScorePlayer.innerText = display;
     },
 
     // Triggers the end-of-song overlay and calculates the final rank.
@@ -993,7 +992,6 @@ const KaraokeApp = {
         });
         this.elements.scoreBarFill.style.width = "0%";
         this.elements.liveScoreValue.innerText = "0";
-        this.elements.liveScorePlayer.innerText = "0";
     },
 
     // Autocorrelation pitch detection.

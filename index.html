@@ -91,11 +91,6 @@
             <div class="video-container" id="videoContainer">
                 <div id="player"></div>
                 
-                <div id="liveScoreBadge" class="live-score-badge">
-                    <span class="label">Score</span>
-                    <span class="value" id="liveScorePlayer">0</span>
-                </div>
-
                 <div id="scoreOverlay" class="score-overlay">
                     <div class="score-rank" id="finalRank">Rockstar</div>
                     <div class="score-number" id="finalScore">85</div>
@@ -105,11 +100,6 @@
                         <button onclick="restartVideo()" aria-label="Sing song again">Sing Again</button>
                     </div>
                 </div>
-
-                <button id="audioStatus" class="mic-status" onclick="toggleVisualizer()" aria-label="Toggle Microphone Scoring">
-                    <span id="micPulseIndicator"></span>
-                    <span aria-hidden="true">🎙️</span> <span id="audioText">Mic: Off</span>
-                </button>
 
                 <div id="playerPlaceholder" class="player-placeholder">
                     <div class="welcome-content">
@@ -137,6 +127,10 @@
                     <button onclick="restartVideo()" aria-label="Restart video"><span class="icon" aria-hidden="true">🔄</span> Restart</button>
                     <button onclick="cancelCurrentSong()" class="cancel-btn" aria-label="Cancel current song"><span class="icon" aria-hidden="true">⏹️</span> Cancel</button>
                     <button onclick="toggleFullscreen()" aria-label="Toggle full screen"><span class="icon" aria-hidden="true">⛶</span> Full</button>
+                    <button id="audioStatus" class="mic-status" onclick="toggleVisualizer()" aria-label="Toggle Microphone Scoring">
+                        <span id="micPulseIndicator"></span>
+                        <span class="icon" aria-hidden="true">🎙️</span> <span id="audioText">Mic: Off</span>
+                    </button>
                 </div>
                 <div class="pcb-right">
                     <span id="playerIdBadge" class="player-id-badge">P-</span>
