@@ -36,24 +36,34 @@ const KaraokeApp = {
         ],
         BACKGROUND_VIDEO: 'backgroundVideo/bgv.mp4',
 
-        // --- Scoring model ---
-        // Tuned to be forgiving: simply singing audibly already earns a solid
-        // score, and volume, pitch and steadiness are bonuses rather than gates.
-        // A steady everyday singer lands in the 70-85 "Pro/Rockstar" band, and
-        // 90+ is reserved for a loud, on-key, consistent voice held for a while.
-        SCORING: {
-            VOICE_GATE: 2.0,        // energy below this is a rest, not a missed note
+        // Grace period after loadVideoById before the stage is assumed stuck and
+        // the tap-to-start prompt takes over. Long enough to cover a cold BUFFERING
+        // on a slow connection, short enough that nobody stares at a black screen.
+        PLAY_GATE_GRACE_MS: 4000,
+
+// --- Scoring model ---
+// Tuned to be forgiving: simply singing audibly already earns a solid
+// score, and volume, pitch and steadiness are bonuses rather than gates.
+// A steady everyday singer lands in the 70-85 "Pro/Rockstar" band, and
+// 90+ is reserved for a loud, on-key, consistent voice held for a while.
+SCORING: {
+            TICK_MS: 50,            // scoring sample interval
+            VOICE_GATE: 2.0,        // energy below this counts as a rest
             LOUDNESS_SPAN: 18,      // energy above the gate that earns full volume credit
             VOICE_FLOOR: 0.66,      // credit for merely singing audibly
             PITCH_MULT: 1.10,       // bonus multiplier for a trackable note
             PITCHLESS_MULT: 0.85,   // penalty when no pitch can be detected at all
             JITTER_SPAN: 300,       // cents of pitch movement treated as maximum instability
-            JITTER_SMOOTHING: 0.18, // EMA weight: one sloppy moment must not crater the score
             JITTER_FLOOR: 0.85,     // worst-case multiplier applied by instability
-            PERF_SMOOTHING: 0.15,   // how fast the meter chases current performance
-            RISE_RATE: 0.12,        // score climbs within a few good phrases
-            FALL_RATE: 0.05,        // ...and drifts down more slowly
-            WARMUP_SAMPLES: 10,     // voiced samples discarded while the analyser settles
+            // Smoothing weights are expressed per SECOND and converted to a per-tick
+            // factor by tickAlpha(), so changing TICK_MS no longer silently retunes
+            // the whole model. (Values below are the old per-tick numbers converted:
+            // 0.18 @200ms, 0.15 @200ms, 0.12 @200ms, 0.05 @200ms.)
+            JITTER_SMOOTHING: 0.556, // pitch-instability tracking speed
+            PERF_SMOOTHING: 0.556,   // how fast the meter chases current performance
+            RISE_RATE: 0.472,        // score climbs within a few good phrases
+            FALL_RATE: 0.226,        // ...and drifts down more slowly
+            WARMUP_MS: 2000,         // voiced time discarded while the analyser settles
             MIN_PITCH_HZ: 60,       // widest vocal range accepted from the detector
             MAX_PITCH_HZ: 1200
         }
@@ -80,15 +90,17 @@ const KaraokeApp = {
         finalScoreTimer: null,
         lastDetectedPitch: 0,
         pitchJitter: 0,
-        voicedWarmup: 0,
+        voicedWarmupMs: 0,
         pendingSongbook: null,
         playerId: null,
         supabaseClient: null,
         heartbeatInterval: null,
         commandPollInterval: null,
         songEnded: false,
+        idle: false,
         remoteWarned: false,
         bgvReady: false,
+        playGateTimer: null,
         searchIdleLabel: { play: null, reserve: null },
         searchFeedbackTimers: {}
     },
@@ -138,7 +150,7 @@ const KaraokeApp = {
             'finalRank', 'finalMessage', 'micPulseIndicator',
             'sidebarSearchInput', 'sidebarPlayBtn', 'sidebarReserveBtn', 'sidebarToggleSearchBtn',
             'sidebarQrCode', 'playPauseBtn', 'playerIdBadge',
-            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer'
+            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer', 'playGate', 'playGateReason'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
     },
@@ -169,7 +181,8 @@ const KaraokeApp = {
             },
             events: {
                 'onReady': () => this.onPlayerReady(),
-                'onStateChange': (e) => this.onPlayerStateChange(e)
+                'onStateChange': (e) => this.onPlayerStateChange(e),
+                'onError': (e) => this.onPlayerError(e)
             }
         });
     },
@@ -190,12 +203,102 @@ const KaraokeApp = {
 
     // Handles logic for when a song ends or is paused.
     onPlayerStateChange(event) {
+        // The stage is only safe to hand over once the iframe is actually
+        // painting frames; until then the recovery prompt owns the screen.
+        if (event.data === YT.PlayerState.PLAYING || event.data === YT.PlayerState.BUFFERING) {
+            this.hidePlayGate();
+        }
+
         // Every state transition can move the player in or out of "a karaoke
         // video is loaded", which is what decides the idle background loop.
         this.syncBackgroundVideo();
         if (event.data === YT.PlayerState.ENDED) {
             this.handleSongEnded();
         }
+    },
+
+    // YouTube load/playback failures. Without this handler a video that cannot be
+    // embedded (101/150) or no longer exists (100) leaves the stage black forever,
+    // because the idle loop was already hidden and nothing restores it.
+    onPlayerError(event) {
+        const code = event && event.data;
+        // 5 is a transient HTML5/network fault: the video is still loaded, so offer
+        // a manual retry instead of tearing the song down.
+        if (code === 5) {
+            this.showPlayGate("Playback hiccup — tap to retry");
+            return;
+        }
+        const reason = code === 101 || code === 150
+            ? "This video does not allow embedded playback."
+            : code === 100
+                ? "This video is unavailable or was removed."
+                : "This video could not be loaded.";
+        this.failPlayback(reason);
+    },
+
+    // Single teardown point for a song that will never play: drop the stage back
+    // to the welcome screen + idle loop and tell the singer why.
+    failPlayback(reason) {
+        console.warn("Playback failed:", reason);
+        this.hidePlayGate();
+        this.goIdle();
+        this.showCustomAlert(reason, "Cannot Play This Song");
+    },
+
+    // Replaces the three duplicated loadVideoById sequences so every song arms the
+    // autoplay watchdog exactly once.
+    loadSong(id, title) {
+        this.prepareForNewSong();
+        this.state.idle = false;
+        this.hideBackgroundVideo();
+        this.state.player.loadVideoById(id);
+        this.updateNowPlayingUI(title);
+        this.armPlayGate();
+    },
+
+    // If YouTube has not started painting within the grace window it never will —
+    // almost always because the browser refused autoplay (typical for a song queued
+    // from the phone remote, where nobody touched the player screen). Without the
+    // gate that state is a black rectangle: controls are off, so there is nothing
+    // to click and no error is emitted.
+    armPlayGate() {
+        this.clearPlayGateTimer();
+        this.state.playGateTimer = setTimeout(() => {
+            this.state.playGateTimer = null;
+            const player = this.state.player;
+            if (!player || typeof player.getPlayerState !== 'function') return;
+            const state = player.getPlayerState();
+            if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) return;
+            this.showPlayGate("Playback was blocked by the browser");
+        }, this.CONFIG.PLAY_GATE_GRACE_MS);
+    },
+
+    clearPlayGateTimer() {
+        clearTimeout(this.state.playGateTimer);
+        this.state.playGateTimer = null;
+    },
+
+    showPlayGate(reason) {
+        const gate = this.elements.playGate;
+        if (!gate) return;
+        this.clearPlayGateTimer();
+        if (this.elements.playGateReason) this.elements.playGateReason.innerText = reason;
+        gate.classList.add('active');
+    },
+
+    hidePlayGate() {
+        this.clearPlayGateTimer();
+        if (this.elements.playGate) this.elements.playGate.classList.remove('active');
+    },
+
+    // Bound to the gate's click. A real user gesture also unblocks the autoplay
+    // policy, so this doubles as the retry for a transient failure.
+    startPendingSong() {
+        this.hidePlayGate();
+        if (this.state.player && typeof this.state.player.playVideo === 'function') {
+            this.state.player.playVideo();
+        }
+        this.armPlayGate();
     },
 
     // Single entry point for "the current song finished".
@@ -509,10 +612,7 @@ const KaraokeApp = {
         const isSongActive = playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING;
 
         if (playNow && !isSongActive) {
-            this.prepareForNewSong();
-            this.hideBackgroundVideo();
-            this.state.player.loadVideoById(id);
-            this.updateNowPlayingUI(song.title);
+            this.loadSong(id, song.title);
         } else {
             // Security: If 'Play Now' is clicked while active, or if 'Reserve' is clicked,
             // the song is added to the end of the queue to avoid interrupting the performance.
@@ -531,16 +631,34 @@ const KaraokeApp = {
         this.prepareForNewSong();
         if (this.state.songQueue.length > 0) {
             const nextSong = this.state.songQueue.shift();
-            this.hideBackgroundVideo();
-            this.state.player.loadVideoById(nextSong.id);
-            this.updateNowPlayingUI(nextSong.title);
+            this.loadSong(nextSong.id, nextSong.title);
             this.updateQueueUI();
         } else {
-            this.state.player.stopVideo();
-            this.updateNowPlayingUI("");
-            // Nothing left to play: hand the stage back to the idle loop.
-            this.syncBackgroundVideo();
+            this.goIdle();
         }
+    },
+
+    // Puts the stage back to the welcome screen + idle loop after a deliberate
+    // stop (Cancel, queue finished, unrecoverable load failure).
+    //
+    // Two things make this more than "stopVideo + show the placeholder":
+    //  - stopVideo() emits ENDED, and prepareForNewSong() has just cleared the
+    //    songEnded latch, so handleSongEnded() would treat the deliberate stop as a
+    //    finished song and open the score overlay. closeScore() then calls back
+    //    into playNextInQueue(), re-clearing the latch and re-triggering it, which
+    //    locked the stage behind the 85%-black overlay permanently.
+    //  - stopVideo() can leave YouTube reporting CUED with a stale video_id, which
+    //    makes isKaraokeActive() true and keeps the idle loop hidden, leaving the
+    //    near-black placeholder as the only visible layer.
+    // The idle flag settles both, instead of trusting the player state.
+    goIdle() {
+        this.state.songEnded = true;
+        this.state.idle = true;
+        if (this.state.player) {
+            try { this.state.player.stopVideo(); } catch (e) { /* player already torn down */ }
+        }
+        this.updateNowPlayingUI("");
+        this.showBackgroundVideo();
     },
 
     // Updates the Dynamic Island and status text.
@@ -568,6 +686,9 @@ const KaraokeApp = {
             this.state.player.pauseVideo();
             btn.innerHTML = '<span class="icon">▶️</span> Play';
         } else {
+            // Resuming from goIdle() puts a song back on the stage, so the idle
+            // flag has to be released or the idle loop would stay painted over it.
+            this.state.idle = false;
             this.state.player.playVideo();
             btn.innerHTML = '<span class="icon">⏸️</span> Pause';
         }
@@ -756,16 +877,16 @@ const KaraokeApp = {
         const energy = Math.sqrt(sum / buf.length) * 100;
         const pitch = this.autoCorrelate(buf, this.state.audioContext.sampleRate);
 
-        // A rest credits nothing, but it is also not counted against the singer:
-        // breathing between phrases must not drag the average down.
+        // A rest holds the meter exactly where it is. Points already earned for
+        // singing stay earned: breathing between phrases, holding a note quietly,
+        // or listening through the instrumental intro must not take the score away.
         if (energy <= S.VOICE_GATE) return;
 
-        // Discard the first few VOICED samples so AudioContext start-up noise
-        // cannot leak into the score.
-        if (this.state.voicedWarmup < S.WARMUP_SAMPLES) {
-            this.state.voicedWarmup += 1;
-            return;
-        }
+        // Discard the first stretch of VOICED time so AudioContext start-up noise
+        // cannot leak into the score. Measured in ms so the warm-up window is the
+        // same length regardless of TICK_MS.
+        this.state.voicedWarmupMs += S.TICK_MS;
+        if (this.state.voicedWarmupMs < S.WARMUP_MS) return;
 
         // Volume credit above the gate, saturating so a hotter mic or a louder
         // singer cannot simply buy a better score.
@@ -781,12 +902,12 @@ const KaraokeApp = {
             const cents = this.state.lastDetectedPitch > 0
                 ? 1200 * Math.abs(Math.log2(pitch / this.state.lastDetectedPitch))
                 : 0;
-            const target = Math.min(cents / S.JITTER_SPAN, 1);
-            this.state.pitchJitter += (target - this.state.pitchJitter) * S.JITTER_SMOOTHING;
+            const jitterTarget = Math.min(cents / S.JITTER_SPAN, 1);
+            this.state.pitchJitter += (jitterTarget - this.state.pitchJitter) * this.tickAlpha(S.JITTER_SMOOTHING);
             this.state.lastDetectedPitch = pitch;
         } else {
             points *= S.PITCHLESS_MULT;
-            this.state.pitchJitter += (1 - this.state.pitchJitter) * S.JITTER_SMOOTHING;
+            this.state.pitchJitter += (1 - this.state.pitchJitter) * this.tickAlpha(S.JITTER_SMOOTHING);
         }
 
         points *= S.JITTER_FLOOR + (1 - S.JITTER_FLOOR) * (1 - this.state.pitchJitter);
@@ -795,13 +916,14 @@ const KaraokeApp = {
         // how the singer is doing *right now*. A cumulative average converges
         // within seconds and the old 80-point floor latched that early reading
         // permanently; this way a high number has to be sustained to be kept.
-        this.state.performance += (Math.min(points, 1) * 100 - this.state.performance) * S.PERF_SMOOTHING;
+        const target = Math.min(points, 1) * 100;
+        this.state.performance += (target - this.state.performance) * this.tickAlpha(S.PERF_SMOOTHING);
 
-        // Rise steadily, drift down even more slowly.
+        // Rise steadily, fall only when the singing itself gets worse.
         const score = this.state.currentScore;
         this.state.currentScore = this.state.performance > score
-            ? score + (this.state.performance - score) * S.RISE_RATE
-            : score - (score - this.state.performance) * S.FALL_RATE;
+            ? score + (this.state.performance - score) * this.tickAlpha(S.RISE_RATE)
+            : score - (score - this.state.performance) * this.tickAlpha(S.FALL_RATE);
         this.state.currentScore = Math.min(Math.max(this.state.currentScore, 0), 100);
 
         // Peak hold: the final result is the best level the singer actually held,
@@ -809,8 +931,15 @@ const KaraokeApp = {
         this.state.peakScore = Math.max(this.state.peakScore, this.state.currentScore);
 
         const display = Math.min(Math.floor(this.state.currentScore), 100);
-this.elements.scoreBarFill.style.width = display + "%";
+        this.elements.scoreBarFill.style.width = display + "%";
         this.elements.liveScoreValue.innerText = display;
+    },
+
+    // Converts a per-second smoothing rate into the equivalent per-tick factor, so
+    // the scoring model behaves identically no matter what TICK_MS is set to.
+    tickAlpha(ratePerSecond) {
+        const seconds = this.CONFIG.SCORING.TICK_MS / 1000;
+        return 1 - Math.pow(1 - Math.min(Math.max(ratePerSecond, 0), 1), seconds);
     },
 
     // Triggers the end-of-song overlay and calculates the final rank.
@@ -885,6 +1014,7 @@ this.elements.scoreBarFill.style.width = display + "%";
     // interval survives the overlay and later fires closeScore() against a new song.
     hideScoreOverlay() {
         this.clearFinalScoreTimer();
+        this.hidePlayGate();
         if (this.state.scoreAudio) this.state.scoreAudio.pause();
         if (this.elements.scoreOverlay) this.elements.scoreOverlay.classList.remove('active');
         this.state.isScoreRevealed = false;
@@ -978,10 +1108,11 @@ this.elements.scoreBarFill.style.width = display + "%";
         }
     },
 
-    // Starts the internal scoring interval (200ms).
+    // Starts the internal scoring interval. The period lives in CONFIG so the
+    // smoothing math and the timer can never drift apart.
     startScoring() {
         if (this.state.scoringInterval) clearInterval(this.state.scoringInterval);
-        this.state.scoringInterval = setInterval(() => this.updateScore(), 200);
+        this.state.scoringInterval = setInterval(() => this.updateScore(), this.CONFIG.SCORING.TICK_MS);
     },
 
     // Stops the internal scoring interval.
@@ -999,7 +1130,7 @@ this.elements.scoreBarFill.style.width = display + "%";
             performance: 0,
             lastDetectedPitch: 0,
             pitchJitter: 0,
-            voicedWarmup: 0
+            voicedWarmupMs: 0
         });
         this.elements.scoreBarFill.style.width = "0%";
         this.elements.liveScoreValue.innerText = "0";
@@ -1117,6 +1248,11 @@ this.elements.scoreBarFill.style.width = display + "%";
         const player = this.state.player;
         if (!player || typeof player.getPlayerState !== 'function') return false;
 
+        // A deliberate stop can leave the player reporting CUED/PAUSED with a stale
+        // video_id. The explicit idle flag is set by goIdle() and cleared by
+        // loadSong(), so it overrides the player state instead of being fooled by it.
+        if (this.state.idle) return false;
+
         const playerState = player.getPlayerState();
         if (playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING) return true;
         if (playerState === YT.PlayerState.PAUSED || playerState === YT.PlayerState.CUED) {
@@ -1137,10 +1273,15 @@ this.elements.scoreBarFill.style.width = display + "%";
         const bgv = this.elements.bgvPlayer;
         if (!bgv) return;
 
+        // Wait until there is something to paint. Revealing the layer early puts its
+        // own background-color:#000 on screen as a black rectangle over the welcome
+        // screen while the 24 MB file is still decoding. canplay re-enters this.
+        if (!this.state.bgvReady) {
+            this.setBackgroundVideoVisible(false);
+            return;
+        }
+
         this.setBackgroundVideoVisible(true);
-        // Wait until there is something to paint, otherwise the freshly revealed
-        // layer flashes black over the welcome screen.
-        if (!this.state.bgvReady) return;
 
         const attempt = bgv.play();
         if (attempt && typeof attempt.catch === 'function') {
@@ -1488,9 +1629,11 @@ this.elements.scoreBarFill.style.width = display + "%";
         }
 
         this.prepareForNewSong();
+        this.state.idle = false;
         this.state.player.seekTo(0);
         if (this.elements.playerPlaceholder) this.elements.playerPlaceholder.classList.add('hidden');
         this.state.player.playVideo();
+        this.armPlayGate();
         if (this.state.isMicActive) this.startScoring();
     },
 
@@ -1526,6 +1669,7 @@ window.playVideo = () => KaraokeApp.state.player?.playVideo();
 window.pauseVideo = () => KaraokeApp.state.player?.pauseVideo();
 window.cancelCurrentSong = () => KaraokeApp.playNextInQueue();
 window.closeScore = () => KaraokeApp.closeScore();
+window.startPendingSong = () => KaraokeApp.startPendingSong();
 window.toggleSearchMode = () => KaraokeApp.toggleSearchMode();
 window.closeCustomAlert = () => KaraokeApp.closeCustomAlert();
 window.openSongBook = () => KaraokeApp.openSongBook();

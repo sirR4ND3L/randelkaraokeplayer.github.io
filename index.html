@@ -111,6 +111,16 @@
                         <p style="color: var(--text-secondary)">Next Gen Karaoke Experience</p>
                     </div>
                 </div>
+
+                <!-- Shown when YouTube never starts painting: the browser blocked
+                     autoplay, or the load failed. Without it the stage is a black
+                     rectangle with no visible way out. -->
+                <button id="playGate" class="play-gate" type="button"
+                    onclick="startPendingSong()" aria-label="Tap to start playing the song">
+                    <span class="play-gate-icon" aria-hidden="true">▶</span>
+                    <span class="play-gate-title">Tap to Start</span>
+                    <span class="play-gate-sub" id="playGateReason">Playback was blocked by the browser</span>
+                </button>
             </div>
 
             <div class="player-control-bar glass-panel">

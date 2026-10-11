@@ -532,6 +532,7 @@ iframe {
     position: relative;
     text-align: center;
 }
+
 .welcome-content h1 {
     font-size: clamp(24px, 5vw, 40px);
     font-weight: 700;
@@ -547,6 +548,67 @@ iframe {
     font-size: 60px;
     margin-bottom: 20px;
     filter: drop-shadow(0 0 30px rgba(0, 122, 255, 0.5));
+}
+
+/* Recovery prompt. Sits above the player/bgv/placeholder but below the score
+   overlay, so a blocked or failed song never leaves the stage as a dead black
+   rectangle with no way forward. */
+.play-gate {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 40px;
+    text-align: center;
+    font: inherit;
+    color: var(--text-primary);
+    cursor: pointer;
+    border: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: var(--transition-smooth);
+}
+
+.play-gate.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.play-gate-icon {
+    font-size: clamp(40px, 8vw, 80px);
+    line-height: 1;
+    color: var(--accent-color);
+    filter: drop-shadow(0 0 18px rgba(0, 122, 255, 0.6));
+    animation: play-gate-pulse 1.6s ease-in-out infinite;
+}
+
+.play-gate-title {
+    font-size: clamp(20px, 4vw, 34px);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.play-gate-sub {
+    font-size: clamp(13px, 2vw, 17px);
+    color: var(--text-secondary);
+    max-width: 80%;
+}
+
+@keyframes play-gate-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.12); opacity: 0.75; }
 }
 
 /* Visualizer - Completely hidden on all screens */
