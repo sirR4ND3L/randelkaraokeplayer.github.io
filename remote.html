@@ -330,6 +330,65 @@
 
         .hint-text { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
 
+        /* Volume card — moved off the player screen in Round 2 */
+        .volume-card {
+            margin-top: 16px;
+            padding: 14px 16px;
+            border-radius: 20px;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+        }
+        .volume-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .volume-head .card-label { margin: 0; }
+        .volume-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .volume-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .volume-row input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.12);
+            outline: none;
+        }
+        .volume-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--accent, #0a84ff);
+            border: 2px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+        }
+        .volume-row input[type="range"]::-moz-range-thumb {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--accent, #0a84ff);
+            border: 2px solid rgba(255, 255, 255, 0.85);
+            cursor: pointer;
+        }
+        .volume-actions {
+            margin-top: 12px;
+        }
+        .volume-actions button { width: 100%; }
+
         /* Song list */
         .song-filter {
             background: var(--glass-light);
@@ -820,6 +879,25 @@
                 <button id="quickReserveBtn" class="btn-glass" type="button" onclick="quickText(false)"><span class="btn-label">Reserve</span></button>
             </div>
             <p id="quickHint" class="hint-text">Not in the songbook? Search by title/artist for best results.</p>
+
+            <!-- Player volume. Lives here rather than on the player screen so the
+                 stage stays clean and the host controls it from the phone. -->
+            <div id="volumeCard" class="volume-card">
+                <div class="volume-head">
+                    <p class="card-label">Volume</p>
+                    <span id="volumeValue" class="volume-value">100</span>
+                </div>
+                <div class="volume-row">
+                    <span aria-hidden="true">🔇</span>
+                    <input type="range" id="volumeSlider" min="0" max="100" step="5" value="100"
+                           aria-label="Player volume" aria-describedby="volumeHint">
+                    <span aria-hidden="true">🔊</span>
+                </div>
+                <div class="volume-actions">
+                    <button id="volumeApplyBtn" class="btn-glass" type="button" onclick="sendVolume()">Apply to player</button>
+                </div>
+                <p id="volumeHint" class="hint-text">Applies to the player screen. It stays until the song or page reloads.</p>
+            </div>
 
             <!-- Number pad: only visible in Number Search mode -->
             <div id="numberPad" class="hidden">
@@ -1759,18 +1837,45 @@
         }
 
         // ---------------------------------------------------------------
+        // Volume control (moved off the player screen in Round 2).
+        // ---------------------------------------------------------------
+        let volumeDirty = false;
+
+        function readVolume() {
+            const v = parseInt(el('volumeSlider').value, 10);
+            return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 100;
+        }
+
+        function setVolumeReadout(v) {
+            el('volumeValue').textContent = String(v);
+        }
+
+        async function sendVolume() {
+            const btn = el('volumeApplyBtn');
+            const value = readVolume();
+            setVolumeReadout(value);
+            if (!volumeDirty) {
+                showToast('Volume already at ' + value + '%', '', 'Move the slider first.');
+                return;
+            }
+            // Reuses the normal command pipeline: insert a volume row, wait for the
+            // player to flip it to ack/failed. Same feedback as a song command.
+            const ok = await sendCommand({ action: 'volume', volume: value }, btn);
+            if (ok) volumeDirty = false;
+        }
+
         // Command delivery (Supabase remote_commands)
         // ---------------------------------------------------------------
         async function sendCommand(cmd, btn) {
             if (!playerId) {
                 showToast('Not paired with a player', 'error');
-                return;
+                return false;
             }
             // Guards the songbook/modal paths too, not just the dimmed buttons:
             // a second command would stack a second 20s poll on top of the first.
             if (commandInFlight) {
                 showToast('Still waiting for the player…', '', 'One command at a time.');
-                return;
+                return false;
             }
             requestWakeLock();
 
@@ -1781,6 +1886,7 @@
                 song_code: cmd.songCode || null,
                 video_id: cmd.videoId || null,
                 video_title: cmd.videoTitle || null,
+                volume: cmd.volume != null ? cmd.volume : null,
                 status: 'pending'
             }).select().single();
 
@@ -1788,11 +1894,14 @@
                 console.error('Command insert error:', error);
                 flashButtonState(btn, 'fail-state', 'Failed');
                 showToast('Could not reach the player', 'error', 'Make sure the remote-control tables exist in Supabase.');
-                return;
+                return false;
             }
 
             const rowId = data.id;
-            showToast(cmd.action === 'play' ? '▶ Sending Play Now...' : '📥 Reserving...', '', 'Waiting for the player...');
+            showToast(
+                cmd.action === 'play' ? '▶ Sending Play Now...'
+                : cmd.action === 'volume' ? '🎧 Setting volume...'
+                : '📥 Reserving...', '', 'Waiting for the player...');
             vibrate(HAPTICS.send);
             setCommandBusy(true);
 
@@ -1818,15 +1927,18 @@
                     const res = await supabaseClient.from('remote_commands')
                         .select('status').eq('id', rowId).single();
                     const status = res.data && res.data.status;
+                    // Declared outside the branches: a volume command is not a song,
+                    // so it must not report "Reserved" on either outcome.
+                    const isVolume = cmd.action === 'volume';
                     if (status === 'ack') {
-                        finish('success-state', cmd.action === 'play' ? 'Done ✓' : 'Reserved ✓');
-                        showToast(cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved', 'success', shortId);
+                        finish('success-state', isVolume ? 'Set ✓' : (cmd.action === 'play' ? 'Done ✓' : 'Reserved ✓'));
+                        showToast(isVolume ? '🎧 Volume set' : (cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved'), 'success', shortId);
                         vibrate(HAPTICS.ack);
                         return;
                     }
                     if (status === 'failed') {
                         finish('fail-state', 'Failed');
-                        showToast('Player could not play that song', 'error', shortId);
+                        showToast(isVolume ? 'Player could not set the volume' : 'Player could not play that song', 'error', shortId);
                         vibrate(HAPTICS.fail);
                         return;
                     }
@@ -1837,6 +1949,7 @@
             };
 
             setTimeout(poll, pollInterval);
+            return true;
         }
 
         // Confirmation lands on the button the guest actually pressed, not only
@@ -1958,6 +2071,13 @@
         captureIdleLabels();
         el('songList').addEventListener('click', onSongListClick);
         el('quickSearchInput').addEventListener('input', onQuickInput);
+
+        // Volume slider: mark dirty while moving, send only on Apply so a drag
+        // does not fire a command per pixel.
+        el('volumeSlider').addEventListener('input', () => {
+            setVolumeReadout(readVolume());
+            volumeDirty = true;
+        });
         setSongbookOpen(songbookOpen);
         syncQuickModeUI();
 

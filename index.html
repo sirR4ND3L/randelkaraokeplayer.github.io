@@ -35,7 +35,10 @@
     <!-- Assets & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="style.css">
+    <!-- ?v= cache-buster: bump this number whenever style.css changes, otherwise a
+         browser (or GitHub Pages) keeps serving the old stylesheet and silently
+         ignores layout fixes. Keep it in step with the ?v on app.js below. -->
+    <link rel="stylesheet" href="style.css?v=6">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#030303">
     <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
@@ -74,17 +77,7 @@
         <div class="blob"></div>
     </div>
 
-    <div class="header-container">
-        <div id="dynamicIsland" class="dynamic-island">
-            <h2 id="nowPlaying">Ready to Sing</h2>
-            <div class="score-meter-container" id="scoreMeter" style="display: none;">
-                <div class="score-bar-bg">
-                    <div id="scoreBarFill"></div>
-                </div>
-                <span id="liveScoreValue">0</span>
-            </div>
-        </div>
-    </div>
+
 
     <div class="main-layout">
         <div class="left-panel">
@@ -93,6 +86,46 @@
 
                 <video id="bgvPlayer" muted loop playsinline autoplay preload="auto"
                     aria-hidden="true" tabindex="-1" disablepictureinpicture></video>
+
+                <!-- Stage overlays. z-index 10 keeps them above the player surface
+                     (z-index 1) and the placeholder (2), but below the score overlay
+                     (100) and the play gate (90), so the score screen stays clean. -->
+                <!-- Dynamic island: now a top-center overlay inside the full-screen
+                     stage. z-index 120 keeps it above the score overlay (100) so the
+                     now-playing title stays readable during the results screen. -->
+                <div class="header-container">
+                    <div id="dynamicIsland" class="dynamic-island">
+                        <h2 id="nowPlaying">Ready to Sing</h2>
+                        <div class="score-meter-container" id="scoreMeter" style="display: none;">
+                            <div class="score-bar-bg">
+                                <div id="scoreBarFill"></div>
+                            </div>
+                            <span id="liveScoreValue">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="queueOverlay" class="stage-overlay stage-overlay--tl glass-panel">
+                    <div class="queue-head">
+                        <span class="queue-head-label">Up Next</span>
+                        <span id="queueCountBadge" class="queue-count-badge" aria-live="polite">0</span>
+                    </div>
+                    <div id="queueList" class="queue-strip" role="list" aria-label="Song queue"></div>
+                    <div id="queueNextRow" class="queue-next">
+                        <span class="queue-next-label">Next</span>
+                        <span id="queueNextTitle" class="queue-next-title">Queue is empty</span>
+                    </div>
+                </div>
+
+                <div id="qrOverlay" class="stage-overlay stage-overlay--bl glass-panel">
+                    <div class="qr-head">
+                        <span class="qr-label">Scan to control</span>
+                        <!-- Still the click-to-copy badge: same id, so
+                             initPlayerBadge/copyPlayerId keep working. -->
+                        <span id="playerIdBadge" class="player-id-badge">P-</span>
+                    </div>
+                    <div id="qrStage"></div>
+                </div>
 
                 <div id="scoreOverlay" class="score-overlay">
                     <div class="score-rank" id="finalRank">Rockstar</div>
@@ -121,85 +154,36 @@
                     <span class="play-gate-title">Tap to Start</span>
                     <span class="play-gate-sub" id="playGateReason">Playback was blocked by the browser</span>
                 </button>
-            </div>
 
-            <div class="player-control-bar glass-panel">
-                <div class="pcb-left">
-                   
-                    <div class="volume-control">
-                        <span aria-hidden="true">🔈</span>
-                        <label for="volumeSlider" class="sr-only">Volume control</label>
-                        <input type="range" id="volumeSlider" min="0" max="100" value="100" oninput="changeVolume(this.value)" aria-label="Volume control">
-                        <span aria-hidden="true">🔊</span>
-                    </div>
-                </div>
-                <div class="pcb-center">
-                     <button id="playPauseBtn" class="play-pause-btn" onclick="togglePlayPause()" aria-label="Play/Pause">
-                        <span class="icon">▶️</span> Play
+                <!-- Transport controls, bottom-center INSIDE the stage. The volume
+                     slider was removed: guests control volume from remote.html. -->
+                <div id="stageControls" class="stage-controls" role="toolbar" aria-label="Player controls">
+                    <button id="playPauseBtn" class="stage-btn stage-btn--primary" onclick="togglePlayPause()" aria-label="Play or pause" aria-keyshortcuts="Z">
+                        <span class="icon" aria-hidden="true">▶️</span>
                     </button>
-                    <button onclick="restartVideo()" aria-label="Restart video"><span class="icon" aria-hidden="true">🔄</span> Restart</button>
-                    <button onclick="cancelCurrentSong()" class="cancel-btn" aria-label="Cancel current song"><span class="icon" aria-hidden="true">⏹️</span> Cancel</button>
-                    <button onclick="toggleFullscreen()" aria-label="Toggle full screen"><span class="icon" aria-hidden="true">⛶</span> Full</button>
-                    <button id="audioStatus" class="mic-status" onclick="toggleVisualizer()" aria-label="Toggle Microphone Scoring">
-                        <span id="micPulseIndicator"></span>
-                        <span class="icon" aria-hidden="true">🎙️</span> <span id="audioText">Mic: Off</span>
+                    <button class="stage-btn" onclick="restartVideo()" aria-label="Restart the current song" aria-keyshortcuts="C">
+                        <span class="icon" aria-hidden="true">🔄</span>
+                    </button>
+                    <button class="stage-btn stage-btn--warn" onclick="skipToNext()" aria-label="Skip to the next song" aria-keyshortcuts="B">
+                        <span class="icon" aria-hidden="true">⏭️</span>
+                    </button>
+
+                    <button id="audioStatus" class="stage-btn" onclick="toggleVisualizer()" aria-label="Toggle microphone scoring" aria-keyshortcuts="M" aria-pressed="false">
+                        <span id="micPulseIndicator" class="stage-btn-dot"></span>
+                        <span class="icon" aria-hidden="true">🎙️</span>
+                    </button>
+                    <button id="qrToggleBtn" class="stage-btn" onclick="toggleQR()" aria-label="Show or hide the QR code" aria-keyshortcuts="Q" aria-pressed="true" aria-controls="qrOverlay">
+                        <span class="icon" aria-hidden="true">📱</span>
+                    </button>
+                    <button id="openSBBtn" class="stage-btn" onclick="openSongBook()" aria-label="Open Songbook">
+                        <span class="icon" aria-hidden="true">🎵</span>
                     </button>
                 </div>
-                <div class="pcb-right">
-                    <span id="playerIdBadge" class="player-id-badge">P-</span>
-                    <button id="openSBBtn" onclick="openSongBook()" class="primary" aria-label="Open Songbook">Open SongBook</button>
-                </div>
-            </div>
-        </div>
-        <div class="right-panel">
-            <!-- Search Section -->
-            <div class="sidebar-section search-section glass-panel">
-                <div class="search-row">
-                    <div class="search-input-wrapper">
-                        <label for="sidebarSearchInput" class="sr-only">Search karaoke song</label>
-                        <input type="text" id="sidebarSearchInput" placeholder="Search for a song..." aria-label="Search karaoke song">
-                    </div>
-                    <div class="search-mode-toggle">
-                        <button id="sidebarToggleSearchBtn" onclick="toggleSearchMode()">Number Search</button>
-                    </div>
-                </div>
-                <div class="sidebar-search-actions">
-                    <button id="sidebarPlayBtn" class="primary" onclick="sidebarSearch(true)" aria-label="Play video instantly">Play Now</button>
-                    <button id="sidebarReserveBtn" onclick="sidebarSearch(false)" aria-label="Reserve song to queue">Reserve</button>
-                </div>
             </div>
 
-            <!-- Queue Section -->
-            <div class="sidebar-section queue-container glass-panel">
-                <h3>Up Next</h3>
-                <ul class="queue-list" id="queueList" aria-label="Song queue">
-                    <li class="empty-queue-state">(Queue is Empty)</li>
-                </ul>
-            </div>
-
-            <!-- Shortcuts Section -->
-            <div class="sidebar-section shortcuts-legend glass-panel">
-                <h4>Shortcuts</h4>
-                <div class="shortcut-grid">
-                    <div class="shortcut-item"><span class="key">Z</span> <span>Play/Pause</span></div>
-                    <div class="shortcut-item"><span class="key">C</span> <span>Restart</span></div>
-                    <div class="shortcut-item"><span class="key">B</span> <span>Cancel</span></div>
-                    <div class="shortcut-item"><span class="key">F</span> <span>Full</span></div>
-                    <div class="shortcut-item"><span class="key">↵</span> <span>Play</span></div>
-                    <div class="shortcut-item"><span class="key">⇧+↵</span> <span>Reserve</span></div>
-                    <div class="shortcut-item"><span class="key">M</span> <span>Mic</span></div>
-                </div>
-            </div>
-
-            <!-- QR Section -->
-            <div class="sidebar-section qr-section glass-panel">
-                <div class="qr-label">QR Remote</div>
-                <div id="sidebarQrCode"></div>
-                <p class="qr-caption">Scan to control with your phone</p>
-            </div>
         </div>
     </div>
 
-    <script src="app.js" defer></script>
+    <script src="app.js?v=6" defer></script>
 </body>
 </html>

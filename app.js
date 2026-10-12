@@ -2,6 +2,19 @@
  * Randel Karaoke Player - Next-Gen karaoke Experience
  */
 
+// --- Keyboard shortcuts ---
+// Single source of truth: the keydown map and the <kbd> badges rendered on each
+// button are both built from this, so a badge can never advertise a key the
+// handler does not listen for. (Before this existed the legend claimed "B = Cancel"
+// while `b` actually skipped to the next queue item.)
+const SHORTCUTS = {
+    z: { label: 'Play/Pause', action: () => KaraokeApp.togglePlayPause() },
+    c: { label: 'Restart',    action: () => KaraokeApp.restartVideo() },
+    b: { label: 'Skip',       action: () => KaraokeApp.playNextInQueue() },
+    m: { label: 'Mic',        action: () => KaraokeApp.toggleVisualizer() },
+    q: { label: 'QR',         action: () => KaraokeApp.toggleQR() }
+};
+
 const KaraokeApp = {
     // --- 1. Configuration & Constants ---
     // Stores API keys, endpoints, and asset paths used throughout the app.
@@ -15,18 +28,6 @@ const KaraokeApp = {
             CHEER: "soundEffects/scoreSound.mp3",
             SUCCESS: "soundEffects/scoreSound.mp3",
             FAIL: "soundEffects/scoreSound.mp3"
-        },
-        NUMBER_SOUND_EFFECTS: {
-            1: 'soundEffects/one.mp3',
-            2: 'soundEffects/two.mp3',
-            3: 'soundEffects/three.mp3',
-            4: 'soundEffects/four.mp3',
-            5: 'soundEffects/five.mp3',
-            6: 'soundEffects/six.mp3',
-            7: 'soundEffects/seven.mp3',
-            8: 'soundEffects/eight.mp3',
-            9: 'soundEffects/nine.mp3',
-            0: 'soundEffects/zero.mp3'
         },
         PREFERRED_CHANNELS: [
             'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
@@ -101,8 +102,8 @@ SCORING: {
         remoteWarned: false,
         bgvReady: false,
         playGateTimer: null,
-        searchIdleLabel: { play: null, reserve: null },
-        searchFeedbackTimers: {}
+        queueFlashTimer: null,
+        volume: 100
     },
 
     // --- 3. Cached DOM Elements ---
@@ -114,7 +115,6 @@ SCORING: {
     async init() {
         await this.loadGlobalComponents();
         this.cacheElements();
-        this.initSearchButtonLabels();
         this.initPlayerBadge();
         this.initBackgroundVideo();
         // parseURLParams must run before loadYouTubeAPI so a ?code= deep link is
@@ -123,7 +123,8 @@ SCORING: {
         this.loadYouTubeAPI();
         this.attachEventListeners();
         this.initMobileScaling();
-        this.initSidebarQR();
+        this.initStageQR();
+        this.restoreQRState();
         this.initSongbookBridge();
         this.initRemoteControl();
     },
@@ -145,11 +146,11 @@ SCORING: {
         const ids = [
             'nowPlaying', 'playerPlaceholder', 'dynamicIsland', 
             'queueList', 'videoContainer', 'audioStatus', 
-            'audioText', 'scoreMeter', 'scoreBarFill', 
+            'scoreMeter', 'scoreBarFill', 
             'liveScoreValue', 'scoreOverlay', 'finalScore', 
             'finalRank', 'finalMessage', 'micPulseIndicator',
-            'sidebarSearchInput', 'sidebarPlayBtn', 'sidebarReserveBtn', 'sidebarToggleSearchBtn',
-            'sidebarQrCode', 'playPauseBtn', 'playerIdBadge',
+            'qrOverlay', 'qrStage', 'qrToggleBtn', 'playPauseBtn', 'playerIdBadge',
+            'queueOverlay', 'queueNextTitle', 'queueNextRow', 'queueCountBadge',
             'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer', 'playGate', 'playGateReason'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
@@ -190,7 +191,7 @@ SCORING: {
     // Setup tasks once the player is ready (e.g., volume sync).
     onPlayerReady() {
         this.startSync();
-        this.state.player.setVolume(100);
+        this.state.player.setVolume(this.state.volume);
         this.syncBackgroundVideo();
 
         // If the page was opened from the songbook (?code=X&play=Y), start that song now
@@ -310,105 +311,10 @@ SCORING: {
         this.state.isMicActive ? this.showFinalScore() : this.playNextInQueue();
     },
 
-    // --- 6. Search Logic ---
-    // Processes user input, checks the local cache, and falls back to YouTube/Invidious APIs.
-
-    // Dispatches search to the correct mode based on toggle state.
-    sidebarSearch(playNow) {
-        const toggleBtn = this.elements.sidebarToggleSearchBtn;
-        const isNumberSearch = toggleBtn && toggleBtn.classList.contains('active');
-        if (isNumberSearch) {
-            this.playByCode(playNow);
-        } else {
-            this.handleSearch(playNow);
-        }
-    },
-
-    async handleSearch(playNow = true) {
-        if (this.state.isScoreRevealed) return;
-        const input = this.elements.sidebarSearchInput;
-        if (!input) return;
-        const query = input.value.trim();
-        if (!query) return;
-
-        const searchBtn = playNow ? this.elements.sidebarPlayBtn : this.elements.sidebarReserveBtn;
-        if (!searchBtn) return;
-        const idleText = this.getSearchIdleLabel(playNow);
-
-        // Handle Direct Links
-        const directId = this.extractVideoId(query);
-        if (directId) {
-            input.value = "";
-            this.handleFoundVideo(directId, playNow, "Direct Link / ID: " + directId);
-            this.showSearchFeedback(searchBtn, playNow);
-            return;
-        }
-
-        this.setSearchLoading(true, searchBtn, idleText);
-        let isSuccess = false;
-
-        try {
-            console.log("🔍 Raw Query:", query);
-            let processedQuery = query.toLowerCase().replace(/['"]/g, "").replace(/\s+/g, " ").trim();
-            if (!processedQuery.includes("karaoke")) processedQuery += " karaoke";
-            const cleanCacheQuery = processedQuery.replace(/[^a-z0-9]/g, "");
-            console.log("🛠️ Formatted Cache Query:", cleanCacheQuery);
-
-            // Try Cache
-            let result = await this.fetchFromCache(cleanCacheQuery);
-            
-            // Fallback to API
-            if (!result) {
-                console.log("⚠️ Cache Miss. Moving to API Fallback.");
-                result = await this.fetchFromYouTubeAPI(processedQuery);
-                
-                if (result) {
-                    console.log("✨ Found via API:", result.id);
-                    this.saveToCache(cleanCacheQuery, result.id, result.title);
-                }
-            } else {
-                console.log("✅ Cache Hit! Found:", result.id);
-            }
-            if (result) {
-                this.elements.sidebarSearchInput.value = "";
-                this.handleFoundVideo(result.id, playNow, result.title);
-                isSuccess = true;
-            } else {
-                this.showCustomAlert("Song not found!");
-            }
-        } catch (err) {
-            console.error("Search error:", err);
-            this.showCustomAlert("Search failed. Please try again.");
-        } finally {
-            this.setSearchLoading(false, searchBtn, idleText);
-            if (isSuccess) this.showSearchFeedback(searchBtn, playNow);
-        }
-    },
-
-    // --- New Search by ID function ---
-    async playByCode(playNow = true) {
-        if (this.state.isScoreRevealed) return;
-        const input = this.elements.sidebarSearchInput;
-        if (!input) return;
-        const id = input.value.trim();
-
-        if (!id) return;
-
-        const searchBtn = playNow ? this.elements.sidebarPlayBtn : this.elements.sidebarReserveBtn;
-        if (!searchBtn) return;
-        const idleText = this.getSearchIdleLabel(playNow);
-
-        console.log(`🔢 Looking up song code: ${id}`);
-
-        this.setSearchLoading(true, searchBtn, idleText);
-        const isSuccess = await this.playSongByNumber(id, playNow);
-        this.setSearchLoading(false, searchBtn, idleText);
-
-        if (isSuccess) {
-            input.value = "";
-            this.showSearchFeedback(searchBtn, playNow);
-        }
-    },
+    // --- 6. Song resolution by number ---
+    // The player no longer searches by title: that lives on remote.html, which
+    // guests use from their phones. What stays here is the songbook-number lookup
+    // that remote commands and the songbook bridge arrive through.
 
     // Fetch a cached song's video details by its songbook number.
     async fetchSongByCode(id) {
@@ -439,7 +345,7 @@ SCORING: {
             const result = await this.fetchSongByCode(code);
             if (result.found) {
                 console.log(`✅ Found song: (Number: ${code}) (Title: ${result.videoTitle}) (ID: ${result.videoId})`);
-                this.handleFoundVideo(result.videoId, playNow, result.videoTitle);
+                this.handleFoundVideo(result.videoId, playNow, result.videoTitle, null, code);
                 console.log("🎉 Successfully added song using number!");
                 return true;
             }
@@ -455,156 +361,20 @@ SCORING: {
         return false;
     },
 
-    // Fetches previously searched results from the custom backend.
-    async fetchFromCache(query) {
-        console.log(`🚀 Starting cache lookup for: ${query}`);
-        try {
-            const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?query=${encodeURIComponent(query)}`);
-            
-            // 1. Explicity check for 204 No Content
-            if (res.status === 204) {
-                console.log("📦 Cache returned 204: No entry found for this query.")
-                return null;
-            }
-            
-            // 2. Check for other non-OK responses
-            if (!res.ok) return null;
-
-            // 3. Now it is safe to parse JSON
-            const data = await res.json();
-            console.log("📦 Cache Response:", data);
-
-            // Require videoId to be present and non-empty to prevent undefined propagation
-            return data.videoId && data.videoId.trim() ? { id: data.videoId, title: data.videoTitle || data.title } : null;
-        } catch (err) {
-            console.error(`❌ Cache fetch error: ${err.message}`);
-            return null;
-        }
-    },
-
-    // Primary search fallback using the backend YouTube search proxy.
-    async fetchFromYouTubeAPI(query) {
-        const endpoint = this.CONFIG.YOUTUBE_SEARCH_ENDPOINT;
-        if (!endpoint) return null;
-
-        // Helper function to check if the result title is actually relevant
-        const isRelevant = (resultTitle, originalQuery) => {
-            // 1. Decode HTML entities (like &#39; to ')
-            const doc = new DOMParser().parseFromString(resultTitle, "text/html");
-            const decodedTitle = doc.documentElement.textContent.toLowerCase();
-            
-            // 2. Clean the title and query of special characters
-            const cleanQuery = originalQuery.toLowerCase().replace(/karaoke/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-            
-            if (!cleanQuery) return false;
-
-            // 3. Segmented Relevance Check
-            // Karaoke titles are usually "Artist - Title (Metadata)". We split by common delimiters.
-            const segments = decodedTitle.split(/[-|()\[\]]/).map(s => 
-                s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
-            ).filter(s => s.length > 0);
-
-            // 4. Match Logic: One of the segments must contain the query words.
-            const queryWords = cleanQuery.split(/\s+/).filter(word => word.length > 0);
-            const squashedQuery = cleanQuery.replace(/\s+/g, "");
-
-            return segments.some(seg => {
-                const segWords = seg.split(/\s+/).filter(word => word.length > 0);
-                const squashedSeg = seg.replace(/\s+/g, "");
-                
-                // Check 1: Exact Phrase Sequence (e.g., "bakit ngayon ka lang")
-                const isPhraseFound = segWords.some((_, i) => 
-                    queryWords.every((word, j) => segWords[i + j] === word)
-                );
-
-                // Check 2: Squashed Match (handles "kalang" vs "ka lang")
-                const isSquashedMatch = squashedSeg.includes(squashedQuery);
-
-                // Validation: Prevent over-matching (e.g., "Your Man" vs "When I Was Your Man")
-                // We allow a difference of up to 2 words to account for minor spacing differences or metadata like "Karaoke".
-                const wordCountDiff = Math.abs(segWords.length - queryWords.length);
-                const isLengthValid = wordCountDiff <= 2;
-
-                return (isPhraseFound || isSquashedMatch) && isLengthValid;
-            });
-        };
-
-        // Bounds each backend call so a hung request cannot leave "Searching..." stuck.
-        const fetchWithTimeout = async (url, ms = 6000) => {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), ms);
-            try {
-                return await fetch(url, { signal: controller.signal });
-            } finally {
-                clearTimeout(timer);
-            }
-        };
-
-        // 1. Preferred Channels Loop
-        for (const channelId of this.CONFIG.PREFERRED_CHANNELS) {
-            console.log('Searching in preferred channel:', channelId);
-            const url = `${endpoint}?q=${encodeURIComponent(query)}&channelId=${channelId}`;
-        
-            try {
-                const res = await fetchWithTimeout(url);
-                const data = await res.json();
-                
-                // Find the first item that actually matches our criteria
-                const item = data.items?.find(it => isRelevant(it.title, query));
-
-                if (item) {
-                    console.log(`✅ Found in preferred channel: ${channelId}`);
-                    return { id: item.id, title: item.title };
-                }
-            } catch (err) {
-                console.error(`❌Song not found in preferred channel: ${channelId}❗${err.message}`);
-            }
-        }
-
-        console.log("🔍 Not in preferred channels. Searching globally...");
-        const globalUrl = `${endpoint}?q=${encodeURIComponent(query)}`;
-
-        try {
-            const res = await fetchWithTimeout(globalUrl);
-            const data = await res.json();
-            
-            const item = data.items?.find(it => isRelevant(it.title, query));
-
-            if (item) {
-                return { id: item.id, title: item.title};
-            }
-        } catch { return null; }
-
-        return null;
-    },
-
-    // Saves new successful API search results to the backend cache.
-    saveToCache(query, videoId, videoTitle) {
-        // Client-side hygiene only, not a security control: the Vercel handler must
-        // re-validate these fields, because the anon client can post anything.
-        const validId = /^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''));
-        const key = String(query || '');
-        if (!validId || key.length < 2 || key.length > 80) {
-            console.warn("Skipped cache save (unexpected payload shape)");
-            return;
-        }
-        fetch(this.CONFIG.CACHE_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, videoId, videoTitle })
-        })
-        .then(res => {
-            if (res.ok) console.log("💾 Successfully Saved to Supabase Cloud Cache!");
-            else console.warn("⚠️ Cache save failed (Server responded with error)");
-        })
-        .catch(e => console.error("Cache save error:", e));
-    },
-
     // --- 7. Queue & Playback Management ---
     // Logic for handling the song list, "Now Playing" UI, and video transitions.
 
-    handleFoundVideo(id, playNow, title, thumbnail = null) {
-        const song = { id, title: title || `Video: ${id}`, thumbnail: thumbnail || `https://img.youtube.com/vi/${id}/mqdefault.jpg` };
+    // songbookNumber is the song's number in the karaoke songbook, when known.
+    // It is NOT the YouTube id: the chip shows this number so the host can match it
+    // against the songbook. Left null for title searches, where the host picked the
+    // song by name and a number would be meaningless.
+    handleFoundVideo(id, playNow, title, thumbnail = null, songbookNumber = null) {
+        const song = {
+            id,
+            title: title || `Video: ${id}`,
+            thumbnail: thumbnail || `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
+            queueNumber: songbookNumber
+        };
 
         // Security check: Prevent interrupting an active performance.
         const playerState = this.state.player && typeof this.state.player.getPlayerState === 'function' ? 
@@ -684,77 +454,93 @@ SCORING: {
         const btn = this.elements.playPauseBtn;
         if (state === YT.PlayerState.PLAYING) {
             this.state.player.pauseVideo();
-            btn.innerHTML = '<span class="icon">▶️</span> Play';
+            btn.innerHTML = '<span class="icon" aria-hidden="true">▶️</span> <span class="pcb-label">Play</span><kbd class="keycap">Z</kbd>';
         } else {
             // Resuming from goIdle() puts a song back on the stage, so the idle
             // flag has to be released or the idle loop would stay painted over it.
             this.state.idle = false;
             this.state.player.playVideo();
-            btn.innerHTML = '<span class="icon">⏸️</span> Pause';
+            btn.innerHTML = '<span class="icon" aria-hidden="true">⏸️</span> <span class="pcb-label">Pause</span><kbd class="keycap">Z</kbd>';
         }
     },
 
-    // Re-renders the "Up Next" list in the right panel.
-    // Song titles and thumbnails come from the YouTube API or a remote command,
-    // so they are attached as text/attributes rather than interpolated into HTML.
+    // Renders the queue as a horizontal strip of numbered chips inside the stage.
+    // Song titles/thumbnails come from the YouTube API or a remote command, so
+    // everything is attached as textContent or attributes, never interpolated HTML.
+    //
+    // Chip numbers show the songbook number when the entry arrived by number
+    // (remote / songbook reservation), because that is the number the host will
+    // recognise from the songbook. Otherwise they fall back to queue position.
     updateQueueUI() {
-        const list = this.elements.queueList;
-        if (!list) return;
-        list.textContent = '';
+        const strip = this.elements.queueList;
+        const nextTitle = this.elements.queueNextTitle;
+        const countBadge = this.elements.queueCountBadge;
+        const nextRow = this.elements.queueNextRow;
+        if (!strip) return;
+        strip.textContent = "";
 
-        if (this.state.songQueue.length === 0) {
-            const empty = document.createElement('li');
-            empty.className = 'empty-queue-state';
-            empty.textContent = '(Queue is Empty)';
-            list.appendChild(empty);
+        const total = this.state.songQueue.length;
+
+        if (countBadge) countBadge.textContent = String(total);
+
+        if (total === 0) {
+            const empty = document.createElement("div");
+            empty.className = "queue-empty";
+            empty.textContent = "Queue is empty \u2014 search or scan to add songs";
+            strip.appendChild(empty);
+            if (nextTitle) nextTitle.textContent = 'Nothing queued';
+            if (nextRow) nextRow.classList.remove("is-flashing");
             return;
         }
 
         this.state.songQueue.forEach((song, index) => {
-            const li = document.createElement('li');
+            const chip = document.createElement("div");
+            chip.className = "queue-chip";
+            chip.setAttribute("role", "listitem");
+            chip.title = song.title;
+            if (index === 0) chip.classList.add("is-next");
 
-            if (index === 0) {
-                const nextTag = document.createElement('div');
-                nextTag.className = 'next-tag';
-                nextTag.textContent = 'Next Up';
-                li.appendChild(nextTag);
-            }
+            const num = document.createElement("span");
+            num.className = "queue-chip-num";
+            num.textContent = song.queueNumber != null && song.queueNumber !== ""
+                ? String(song.queueNumber)
+                : String(index + 1);
 
-            const thumb = document.createElement('img');
-            thumb.className = 'song-thumb';
-            thumb.setAttribute('src', song.thumbnail);
-            thumb.setAttribute('alt', '');
+            const remove = document.createElement("button");
+            remove.className = "queue-chip-x";
+            remove.type = "button";
+            remove.textContent = "\u2715";
+            remove.setAttribute("aria-label", `Remove ${song.title} from queue`);
+            remove.addEventListener("click", () => this.removeFromQueue(index));
 
-            const info = document.createElement('div');
-            info.className = 'song-info';
-
-            const title = document.createElement('span');
-            title.className = 'song-title';
-            title.textContent = song.title;
-
-            const meta = document.createElement('div');
-            meta.className = 'song-meta';
-            meta.textContent = `Pos: ${index + 1} • Ready to sing`;
-
-            info.appendChild(title);
-            info.appendChild(meta);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'queue-remove-btn';
-            removeBtn.type = 'button';
-            removeBtn.textContent = '✕';
-            removeBtn.setAttribute('aria-label', `Remove ${song.title} from queue`);
-            removeBtn.addEventListener('click', () => this.removeFromQueue(index));
-
-            li.appendChild(thumb);
-            li.appendChild(info);
-            li.appendChild(removeBtn);
-            list.appendChild(li);
+            chip.appendChild(num);
+            chip.appendChild(remove);
+            strip.appendChild(chip);
         });
+
+        // The line under the strip is the host's "what plays next" answer.
+        if (nextTitle) nextTitle.textContent = this.state.songQueue[0].title;
+        this.flashNextRow();
+    },
+
+    // Briefly highlights the next-song line so a reservation made from a phone is
+    // noticed without having to hunt for it.
+    flashNextRow() {
+        const row = this.elements.queueNextRow;
+        if (!row) return;
+        clearTimeout(this.state.queueFlashTimer);
+        row.classList.remove("is-flashing");
+        // Force a reflow so the animation restarts on repeat changes.
+        void row.offsetWidth;
+        row.classList.add("is-flashing");
+        this.state.queueFlashTimer = setTimeout(() => {
+            row.classList.remove("is-flashing");
+        }, 900);
     },
 
     // Removes a specific song from the user's queue.
     removeFromQueue(index) {
+        if (index < 0 || index >= this.state.songQueue.length) return;
         this.state.songQueue.splice(index, 1);
         this.updateQueueUI();
     },
@@ -763,7 +549,7 @@ SCORING: {
     // Handles microphone access, real-time pitch detection, and score calculation.
 
     async toggleVisualizer() {
-        const { audioStatus, audioText, scoreMeter, micPulseIndicator } = this.elements;
+        const { audioStatus, scoreMeter, micPulseIndicator } = this.elements;
 
         if (this.state.isMicActive) {
             this.stopScoring();
@@ -780,8 +566,9 @@ SCORING: {
             this.state.isMicActive = false;
             
             audioStatus.classList.remove('active');
-            audioText.innerText = "Mic: Off";
+            this.setMicLabel(false);
             scoreMeter.style.display = "none";
+            this.syncMicPressed();
             micPulseIndicator.style.display = 'none';
             return;
         }
@@ -819,9 +606,10 @@ SCORING: {
             this.state.scoreBuffer = new Float32Array(this.state.micAnalyser.fftSize);
             
             this.state.isMicActive = true;
+        this.syncMicPressed();
 
             audioStatus.classList.add('active');
-            audioText.innerText = "Mic: On";
+            this.setMicLabel(true);
             scoreMeter.style.display = "flex";
             
             this.startScoring();
@@ -961,8 +749,6 @@ SCORING: {
         this.playScoreSound(rankData.rank);
         this.startFinalScoreTimer();
 
-        // Security: Disable search controls while score is revealed
-        this.setSearchButtonsDisabled(true);
     },
 
     // Determines label and color based on the numeric score.
@@ -1018,7 +804,6 @@ SCORING: {
         if (this.state.scoreAudio) this.state.scoreAudio.pause();
         if (this.elements.scoreOverlay) this.elements.scoreOverlay.classList.remove('active');
         this.state.isScoreRevealed = false;
-        this.setSearchButtonsDisabled(false);
     },
 
     // Runs before any new song begins, so no overlay or score state leaks across songs.
@@ -1026,86 +811,6 @@ SCORING: {
         this.hideScoreOverlay();
         this.resetScore();
         this.state.songEnded = false;
-    },
-
-    // --- 9. Utility Functions ---
-    // Generic helpers for string parsing, UI loading states, and audio processing.
-    extractVideoId(query) {
-        try {
-            const url = new URL(query);
-            if (url.hostname.includes('youtube.com')) return url.searchParams.get('v');
-            if (url.hostname === 'youtu.be') return url.pathname.slice(1);
-        } catch {}
-        return (query.length === 11 && !query.includes(' ')) ? query : null;
-    },
-
-    // Captures the resting label of each search button exactly once, at startup.
-    // Reading btn.innerText at click time is unreliable: a previous success
-    // message may still be on screen and would become the new "original" label.
-    initSearchButtonLabels() {
-        const play = this.elements.sidebarPlayBtn;
-        const reserve = this.elements.sidebarReserveBtn;
-        if (play) this.state.searchIdleLabel.play = play.innerText;
-        if (reserve) this.state.searchIdleLabel.reserve = reserve.innerText;
-    },
-
-    // Returns the resting label for the button behind a given playNow flag.
-    getSearchIdleLabel(playNow) {
-        const cached = playNow ? this.state.searchIdleLabel.play : this.state.searchIdleLabel.reserve;
-        // Fall back to the live button text if startup capture somehow did not run,
-        // so the button can never be restored as the string "null".
-        const btn = playNow ? this.elements.sidebarPlayBtn : this.elements.sidebarReserveBtn;
-        if (cached) return cached;
-        return (btn && btn.innerText) || (playNow ? 'Play Now' : 'Reserve');
-    },
-
-    // Toggles button loading states during async search operations.
-    setSearchLoading(isLoading, btn, text, container) {
-        btn.innerText = isLoading ? "Searching..." : text;
-        // Never clear the score-overlay lock from here.
-        btn.disabled = isLoading || this.state.isScoreRevealed;
-        if (container) container.classList.toggle('loading', isLoading);
-    },
-
-    // Enables or disables both search actions together, so the score-overlay
-    // lock can never be lifted by a single button update.
-    setSearchButtonsDisabled(disabled) {
-        [this.elements.sidebarPlayBtn, this.elements.sidebarReserveBtn]
-            .forEach(btn => { if (btn) btn.disabled = disabled; });
-    },
-
-    // Provides visual confirmation of a successful song addition.
-    showSearchFeedback(btn, playNow) {
-        if (!btn) return;
-
-        // Cancel any feedback window still running for this button, so overlapping
-        // searches cannot restore a stale label out of order.
-        const key = playNow ? 'play' : 'reserve';
-        clearTimeout(this.state.searchFeedbackTimers[key]);
-
-        // Immediately remove focus from input to "deactivate" the search bar visual state
-        if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
-        }
-
-        const successText = playNow ? "Done ✓" : "Reserved ✓";
-        btn.classList.add('success-state');
-        btn.innerText = successText;
-
-        this.state.searchFeedbackTimers[key] = setTimeout(() => {
-            delete this.state.searchFeedbackTimers[key];
-            btn.classList.remove('success-state');
-            btn.innerText = this.getSearchIdleLabel(playNow);
-            // Clear search inputs without resetting the UI mode
-            this.clearSearchInputs();
-        }, 2000);
-    },
-
-    // Clears the search input.
-    clearSearchInputs() {
-        if (this.elements.sidebarSearchInput) {
-            this.elements.sidebarSearchInput.value = "";
-        }
     },
 
     // Starts the internal scoring interval. The period lives in CONFIG so the
@@ -1187,23 +892,6 @@ SCORING: {
         this.state.scoreAudio = new Audio(sound);
         this.state.scoreAudio.volume = 0.125;
         this.state.scoreAudio.play().catch(() => {});
-    },
-
-    // Plays the sound effect for a specific digit during number search.
-    playNumberSound(digit) {
-        const player = this.state.player;
-        if (player && typeof player.getPlayerState === 'function') {
-            const state = player.getPlayerState();
-            // Disable sound effects if a song is currently playing or buffering
-            if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) return;
-        }
-
-        const soundPath = this.CONFIG.NUMBER_SOUND_EFFECTS[digit];
-        if (soundPath) {
-            const audio = new Audio(soundPath);
-            audio.volume = 0.3; // Moderate volume for typing feedback
-            audio.play().catch(() => {});
-        }
     },
 
     // --- 8.5 Idle Background Video ---
@@ -1330,15 +1018,67 @@ SCORING: {
 
     // --- 10. Event Listeners & UI Helpers ---
     // Logic for keyboard shortcuts and responsive layout adjustments.
-    initSidebarQR() {
-        const container = this.elements.sidebarQrCode;
+    // Renders the remote-control QR into the bottom-left stage overlay.
+    // 200px (+ the CSS quiet zone) is the sweet spot: reliably scannable from a
+    // few metres away without dominating the video frame.
+    initStageQR() {
+        const container = this.elements.qrStage;
         if (!container || typeof QRCode === 'undefined') return;
-        container.innerHTML = '';
+        container.innerHTML = "";
         new QRCode(container, {
             text: "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/remote.html?player=" + encodeURIComponent(this.getPlayerId()),
-            width: 160,
-            height: 160
+            width: 200,
+            height: 200,
+            // M survives a photographed or screen-reflected code, which is the
+            // realistic venue case. L is cheaper to generate but fails there.
+            correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : undefined
         });
+        // Without this the browser bilinearly rescales the modules into a blur,
+        // which is the usual cause of a QR that "looks fine but will not scan".
+        container.querySelectorAll("img, canvas").forEach(node => {
+            node.style.imageRendering = "pixelated";
+        });
+    },
+
+    // Restores the QR overlay visibility chosen earlier this session/event.
+    restoreQRState() {
+        let saved = null;
+        try { saved = localStorage.getItem('rk_qr_visible'); } catch (e) { /* private mode */ }
+        // Default is visible: a guest should be able to scan without a prompt.
+        this.toggleQR(saved === null ? true : saved === '1');
+    },
+
+    // Shows/hides the QR overlay. Persisted so the host sets the stage up once
+    // and the choice survives a reload mid-event.
+    toggleQR(force) {
+        const overlay = this.elements.qrOverlay;
+        if (!overlay) return;
+        const btn = this.elements.qrToggleBtn;
+        const show = typeof force === 'boolean'
+            ? force
+            : overlay.classList.contains('is-hidden');
+        overlay.classList.toggle('is-hidden', !show);
+        if (btn) btn.setAttribute("aria-pressed", show ? "true" : "false");
+        try { localStorage.setItem('rk_qr_visible', show ? '1' : '0'); } catch (e) { /* private mode */ }
+    },
+
+    // Applies a restored/remote volume. The YouTube player instance survives
+    // loadVideoById, so this persists across songs automatically.
+    setVolume(value) {
+        const vol = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+        this.state.volume = vol;
+        if (this.state.player && typeof this.state.player.setVolume === 'function') {
+            this.state.player.setVolume(vol);
+        }
+        return vol;
+    },
+
+    // Handles a `volume` command sent from remote.html. Returns true if accepted.
+    handleVolumeCommand(row) {
+        const raw = row.volume != null ? row.volume : NaN;
+        if (raw === null || Number.isNaN(Number(raw))) return false;
+        this.setVolume(raw);
+        return true;
     },
 
     openSongBook() {
@@ -1486,10 +1226,17 @@ SCORING: {
                     // Bound the set so a long-running player tab cannot grow it forever.
                     if (handled.size > 50) handled.delete(handled.values().next().value);
 
-                    const playNow = row.action === 'play';
-                    const ok = row.video_id
-                        ? this.handleRemoteVideo(row, playNow)
-                        : await this.playSongByNumber(row.song_code, playNow);
+                    // A volume command is not a song command: handle and ack it
+                    // without touching the queue.
+                    let ok;
+                    if (row.action === 'volume') {
+                        ok = this.handleVolumeCommand(row);
+                    } else {
+                        const playNow = row.action === 'play';
+                        ok = row.video_id
+                            ? this.handleRemoteVideo(row, playNow)
+                            : await this.playSongByNumber(row.song_code, playNow);
+                    }
                     await client.from('remote_commands')
                         .update({ status: ok ? 'ack' : 'failed' })
                         .eq('id', row.id);
@@ -1509,7 +1256,13 @@ SCORING: {
     handleRemoteVideo(row, playNow) {
         if (this.state.isScoreRevealed) return false;
         if (!row.video_id) return false;
-        this.handleFoundVideo(row.video_id, playNow, row.video_title || `Video: ${row.video_id}`);
+        this.handleFoundVideo(
+            row.video_id,
+            playNow,
+            row.video_title || `Video: ${row.video_id}`,
+            null,
+            row.song_code != null ? String(row.song_code) : null
+        );
         return true;
     },
 
@@ -1551,40 +1304,42 @@ SCORING: {
         if (this.elements.customAlert) this.elements.customAlert.style.display = 'none';
     },
 
-    toggleSearchMode() {
-        const input = this.elements.sidebarSearchInput;
-        const toggleBtn = this.elements.sidebarToggleSearchBtn;
-        if (!input || !toggleBtn) return;
-
-        const isText = !toggleBtn.classList.contains('active');
-        if (isText) {
-            toggleBtn.classList.add('active');
-            toggleBtn.innerText = "Text Search";
-            input.placeholder = "Enter song number...";
-        } else {
-            toggleBtn.classList.remove('active');
-            toggleBtn.innerText = "Number Search";
-            input.placeholder = "Search for a song...";
-        }
-        input.value = '';
+    // Writes each button's <kbd> badge from the SHORTCUTS table. The HTML ships a
+    // sensible static fallback, but this guarantees the badge text, the
+    // aria-keyshortcuts attribute and the actual keydown map all agree.
+    syncShortcutBadges() {
+        document.querySelectorAll(".pcb-center button[keycap], .pcb-center button").forEach(btn => {
+            const kbd = btn.querySelector("kbd.keycap");
+            const declared = btn.getAttribute("aria-keyshortcuts");
+            if (!kbd || !declared) return;
+            const key = declared.toLowerCase();
+            const entry = SHORTCUTS[key];
+            if (!entry) return;
+            kbd.textContent = key.toUpperCase();
+            btn.setAttribute("title", `${entry.label} (${key.toUpperCase()})`);
+        });
     },
 
+    // Keeps aria-pressed honest on the mic toggle so its state is not carried by
+    // colour and text alone.
+    // The mic control is an icon-only circle inside the player, so its state is
+    // carried by the accessible name rather than a visible text span.
+    setMicLabel(active) {
+        const btn = this.elements.audioStatus;
+        if (!btn) return;
+        btn.setAttribute("aria-label", active ? "Microphone scoring is on, tap to turn off" : "Turn on microphone scoring");
+        btn.title = active ? "Mic: On (M)" : "Mic: Off (M)";
+    },
+
+    syncMicPressed() {
+        const btn = this.elements.audioStatus;
+        if (!btn) return;
+        btn.setAttribute("aria-pressed", this.state.isMicActive ? "true" : "false");
+    },
 
     attachEventListeners() {
-        document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
-
-        // Audio feedback for number search input (Voice Guide)
-        if (this.elements.sidebarSearchInput) {
-            this.elements.sidebarSearchInput.addEventListener('keydown', (e) => {
-                if (/^[0-9]$/.test(e.key) && !e.repeat) {
-                    const toggleBtn = this.elements.sidebarToggleSearchBtn;
-                    if (toggleBtn && toggleBtn.classList.contains('active')) {
-                        this.playNumberSound(e.key);
-                    }
-                }
-            });
-        }
-    },
+        this.syncShortcutBadges();
+        document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));    },
 
     // Maps physical keys (Z, C, B, F) to app actions.
     handleGlobalKeyDown(event) {
@@ -1600,25 +1355,10 @@ SCORING: {
             return; // Block other shortcuts while alert is active
         }
 
-        if (document.activeElement === this.elements.sidebarSearchInput) {
-            if (event.key === 'Enter') {
-                const playerState = this.state.player && typeof this.state.player.getPlayerState === 'function' ? 
-                                   this.state.player.getPlayerState() : -1;
-                const isSongActive = playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING;
-                const playNow = event.shiftKey ? false : !isSongActive;
-                this.sidebarSearch(playNow);
-            }
-            return;
-        }
-        const map = {
-            'z': () => this.togglePlayPause(),
-            'c': () => this.restartVideo(),
-            'b': () => this.playNextInQueue(),
-            'f': () => this.toggleFullscreen(),
-            'm': () => this.toggleVisualizer()
-        };
-        const action = map[event.key.toLowerCase()];
-        if (action) action();
+        // Built from the SHORTCUTS table so the handler and the <kbd> badges on
+        // the buttons can never disagree.
+        const shortcut = SHORTCUTS[event.key.toLowerCase()];
+        if (shortcut) shortcut.action();
     },
 
     // Reloads the current video and resets the score.
@@ -1664,17 +1404,20 @@ SCORING: {
 window.toggleVisualizer = () => KaraokeApp.toggleVisualizer();
 window.restartVideo = () => KaraokeApp.restartVideo();
 window.toggleFullscreen = () => KaraokeApp.toggleFullscreen();
-window.changeVolume = (val) => KaraokeApp.state.player?.setVolume(Number(val));
 window.playVideo = () => KaraokeApp.state.player?.playVideo();
 window.pauseVideo = () => KaraokeApp.state.player?.pauseVideo();
-window.cancelCurrentSong = () => KaraokeApp.playNextInQueue();
+// Honest name for what this actually does: advance to the next queued song, or
+// return to idle when the queue is empty. It never aborts the current song.
+window.skipToNext = () => KaraokeApp.playNextInQueue();
+// Back-compat: the old name promised a cancel that never existed. Kept so any
+// cached page still works, but it is a misnomer.
+window.cancelCurrentSong = window.skipToNext;
 window.closeScore = () => KaraokeApp.closeScore();
 window.startPendingSong = () => KaraokeApp.startPendingSong();
-window.toggleSearchMode = () => KaraokeApp.toggleSearchMode();
 window.closeCustomAlert = () => KaraokeApp.closeCustomAlert();
 window.openSongBook = () => KaraokeApp.openSongBook();
 window.togglePlayPause = () => KaraokeApp.togglePlayPause();
-window.sidebarSearch = (playNow) => KaraokeApp.sidebarSearch(playNow);
+window.toggleQR = () => KaraokeApp.toggleQR();
 window.getPlayerShortId = () => KaraokeApp.getPlayerShortId();
 window.getPlayerId = () => KaraokeApp.getPlayerId();
 

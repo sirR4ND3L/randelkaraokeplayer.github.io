@@ -17,8 +17,25 @@
     --text-tertiary: rgba(255, 255, 255, 0.35);
     --dynamic-island-bg: #000000;
     --panel-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    /* --transition-smooth animates *all* properties, which includes layout ones,
+       so it looks laggy on tap. Keep it for slow ambient transitions only. */
     --transition-smooth: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: 160ms cubic-bezier(0.4, 0, 0.2, 1);
     --text-alert-color: rgb(243, 52, 42);
+
+    /* Stage overlays (queue / QR) live inside the video frame. Sized through
+       variables so they shrink smoothly with the viewport instead of jumping
+       between hardcoded breakpoint layouts. */
+    --qr-size: 150px;
+    --qr-pad: 10px;
+    --queue-chip-size: 30px;
+    --overlay-gap: 14px;
+    --overlay-radius: 16px;
+    --overlay-bg: rgba(0, 0, 0, 0.55);
+    --overlay-max-w: 46%,
+
+    --ctl-size: 38px;
+    --ctl-gap: 7px;
 }
 
 * {
@@ -34,7 +51,12 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    /* dvh tracks the collapsing mobile URL bar, so the control bar is never
+       pushed under it; svh is the stable fallback for older Safari. */
     min-height: 100vh;
+    min-height: 100dvh;
+    /* Everything now lives inside a viewport-sized stage, so there is nothing
+       to scroll. */
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
 }
@@ -149,15 +171,21 @@ body {
 }
 
 /* Dynamic Island Style Header */
+/* Dynamic island: top-center overlay inside the stage. Sits above the score
+   overlay so the now-playing title stays readable on the results screen. */
 .header-container {
-    position: sticky;
-    top: 16px;
-    z-index: 1000;
-    margin-bottom: 24px;
-    width: 100%;
+    position: absolute;
+    /* Plain pixel value, same reasoning as .stage-controls above. */
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 120;
     display: flex;
     justify-content: center;
-    padding: 0 20px;
+    /* Never blocks a click meant for the video or a control beneath it. */
+    pointer-events: none;
+    max-width: min(70vw, 520px);
+    margin-bottom: 0;
 }
 
 .dynamic-island {
@@ -265,203 +293,39 @@ button.success-state {
     font-weight: 600 !important;
 }
 
-/* Layout */
+/* =========================================================================
+   LAYOUT — single column. The right panel was removed; search now lives in
+   the control bar and the queue/QR are stage overlays inside the video.
+   ========================================================================= */
+/* Layout wrappers. The stage is fixed to the viewport, so these only exist to
+   hold the DOM shape (and the fullscreen target). */
 .main-layout {
-    display: flex;
-    flex-direction: column;
+    display: block;
     width: 100%;
-    max-width: 100%;
-    align-items: center;
-    gap: 24px;
-    padding: 0 20px 40px;
-    box-sizing: border-box;
-    margin: 0 auto;
 }
 
 .left-panel {
-    flex: 8;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: block;
     width: 100%;
-    min-width: 0;
 }
 
-.right-panel {
-    flex: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    min-width: 0;
-    position: sticky;
-    top: 100px;
-    gap: 24px;
-}
-
-@media (min-width: 1000px) {
-    .main-layout {
-        flex-direction: row;
-        align-items: flex-start;
-        gap: 30px;
-    }
-    .player-control-bar {
-        flex-wrap: nowrap;
-        justify-content: space-between;
-        padding: 12px 24px;
-    }
-    .pcb-left,
-    .pcb-center,
-    .pcb-right {
-        flex: 0 0 auto;
-        justify-content: flex-start;
-    }
-    .pcb-center {
-        gap: 8px;
-    }
-}
-
-@media (min-width: 1024px) and (max-width: 1399px) {
-    .main-layout {
-        gap: 24px;
-        padding: 0 16px 40px;
-    }
-    .left-panel {
-        flex: 6;
-    }
-    .right-panel {
-        flex: 4;
-        max-width: 380px;
-    }
-    .player-control-bar {
-        padding: 10px 14px;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .pcb-left,
-    .pcb-center,
-    .pcb-right {
-        flex: 0 1 auto;
-    }
-    .pcb-left {
-        gap: 6px;
-    }
-    .pcb-center {
-        gap: 4px;
-    }
-    .pcb-center button {
-        padding: 8px 10px;
-        font-size: 11px;
-    }
-    .play-pause-btn {
-        min-width: 60px;
-        padding: 8px 12px;
-        font-size: 13px;
-    }
-    .volume-control {
-        padding: 6px 10px;
-        gap: 4px;
-    }
-    .volume-control input[type=range] {
-        width: 64px;
-    }
-    #openSBBtn {
-        padding: 8px 12px;
-        font-size: 11px;
-    }
-}
-
-@media (min-width: 1400px) {
-    .main-layout {
-        gap: 36px;
-        padding: 0 24px 48px;
-    }
-    .left-panel {
-        flex: 6;
-    }
-    .right-panel {
-        flex: 4;
-        max-width: 380px;
-    }
-    .player-control-bar {
-        padding: 14px 24px;
-        gap: 20px;
-    }
-}
-
-@media (max-width: 1023px) {
-    .right-panel {
-        position: static;
-    }
-    .main-layout {
-        padding: 0 12px 40px;
-        gap: 16px;
-    }
-    .player-control-bar {
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 10px;
-        padding: 12px 14px;
-    }
-    .pcb-left,
-    .pcb-center,
-    .pcb-right {
-        flex: 1 1 auto;
-        justify-content: center;
-    }
-}
-
-@media (min-width: 769px) and (max-width: 1023px) {
-    .main-layout {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 0 16px 32px;
-    }
-    .right-panel {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-        align-items: start;
-    }
-    .search-section {
-        grid-column: 1 / -1;
-    }
-    .queue-container,
-    .qr-section {
-        min-height: 100%;
-    }
-    .shortcuts-legend {
-        display: none !important;
-    }
-    .player-control-bar {
-        flex-wrap: wrap;
-        justify-content: space-between;
-        padding: 12px 20px;
-        gap: 16px;
-    }
-    .pcb-left,
-    .pcb-center,
-    .pcb-right {
-        flex: 0 0 auto;
-    }
-}
-
+/* Video Container */
 .video-container {
-    position: relative;
+    /* The player is the whole app: pinned to the viewport, so the only thing on
+       screen is the video plus its floating overlays. */
+    position: fixed;
+    inset: 0;
     width: 100%;
-    aspect-ratio: 15 / 8;
-    max-width: 100%;
-    border-radius: 20px;
+    height: 100vh;
+    height: 100dvh;
+    aspect-ratio: auto;
+    max-width: none;
+    border-radius: 0;
     overflow: hidden;
     background: #000;
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: var(--transition-smooth);
-}
-
-.video-container:hover {
-    border-color: rgba(0, 122, 255, 0.3);
-    box-shadow: 0 0 50px rgba(0, 122, 255, 0.15), 0 30px 70px rgba(0, 0, 0, 0.8);
+    box-shadow: none;
+    border: none;
+    transition: var(--transition-fast);
 }
 
 #player {
@@ -668,49 +532,24 @@ input[type="number"]::-webkit-outer-spin-button {
     margin: 0;
 }
 
-
 /* Player Control Bar */
-.player-control-bar {
-    margin-top: 10px;
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    width: 100%;
-    background: var(--glass-bg);
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
-    border: 1px solid var(--glass-border);
-    border-radius: 32px;
-    box-shadow: var(--panel-shadow);
-}
-
-.pcb-left,
-.pcb-center,
-.pcb-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.pcb-right {
-    flex-shrink: 0;
-}
-
 .player-id-badge {
-    padding: 6px 12px;
-    border-radius: 24px;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-tertiary);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
-    transition: var(--transition-smooth);
+    touch-action: manipulation;
+    transition: var(--transition-fast);
 }
 
 .player-id-badge:hover {
@@ -731,182 +570,7 @@ input[type="number"]::-webkit-outer-spin-button {
     }
 }
 
-.play-pause-btn {
-    background: var(--accent-color);
-    border: none;
-    box-shadow: 0 8px 20px rgba(0, 122, 255, 0.3);
-    min-width: 90px;
-}
-
-.play-pause-btn:hover {
-    background: #0084ff;
-    box-shadow: 0 12px 25px rgba(0, 122, 255, 0.5);
-}
-
-#openSBBtn {
-    background: var(--accent-color);
-    box-shadow: 0 8px 20px rgba(0, 122, 255, 0.3);
-    padding: 12px 20px;
-    font-weight: 700;
-    letter-spacing: 1px;
-}
-
-/* Sidebar Sections */
-.sidebar-section {
-    width: 100%;
-    padding: 20px;
-    border-radius: 20px;
-}
-
-/* Search Section */
-.search-section {
-    display: flex;
-    flex-direction: column;
-}
-
-.search-row {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-}
-
-.search-input-wrapper {
-    flex: 1;
-}
-
-.search-section .search-row button {
-    font-size: 10px;
-    padding: 6px 10px;
-    width: 90px;
-    height: 45px;
-    border-radius: 200px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text-tertiary);
-    cursor: pointer;
-    transition: var(--transition-smooth);
-    font-family: inherit;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.search-section .search-row button.active {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(0, 122, 255, 0.3);
-    color: var(--text-primary);
-}
-
-.search-row .search-mode-toggle {
-    margin-bottom: 0;
-}
-
-.search-section .search-row .search-mode-toggle button {
-    width: 100px;
-    height: 40px;
-    font-size: 11px;
-    padding: 8px 14px;
-    border-radius: 100px;
-    flex-shrink: 0;
-}
-
-#sidebarSearchInput {
-    padding: 12px 18px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    color: white;
-    font-size: 14px;
-    font-family: inherit;
-    outline: none;
-    box-sizing: border-box;
-    transition: var(--transition-smooth);
-}
-
-#sidebarSearchInput:focus {
-    border-color: rgba(0, 122, 255, 0.4);
-    background: rgba(255, 255, 255, 0.07);
-    box-shadow: 0 0 20px rgba(0, 122, 255, 0.1);
-}
-
-#sidebarSearchInput::placeholder {
-    color: var(--text-tertiary);
-}
-
-.sidebar-search-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.sidebar-search-actions button {
-    flex: 1;
-    padding: 10px 14px;
-    font-size: 13px;
-    border-radius: 14px;
-}
-
-/* Queue Section — Scrollable */
-.queue-container {
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-/* Shortcuts in Sidebar */
-.shortcuts-legend {
-    padding: 20px;
-    margin-top: 0;
-}
-
-/* QR Section */
-.qr-section {
-    text-align: center;
-    padding: 10px;
-}
-
-.qr-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 12px;
-}
-
-#sidebarQrCode {
-    background: white;
-    padding: 10px;
-    border-radius: 16px;
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    margin-bottom: 10px;
-}
-
-#sidebarQrCode img,
-#sidebarQrCode canvas {
-    display: block;
-    max-width: 100%;
-    height: auto;
-}
-
-.qr-caption {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    margin: 0;
-    line-height: 1.4;
-}
-
 /* Volume & Progress */
-.volume-control {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.08);
-    padding: 10px 20px;
-    border-radius: 20px;
-}
 
 input[type=range] {
     accent-color: var(--accent-color);
@@ -927,212 +591,6 @@ input[type=range] {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
-}
-
-/* Queue List */
-.queue-container {
-    padding: 24px;
-    width: 100%;
-}
-
-.queue-container h3 {
-    margin: 0 0 20px;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.queue-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.queue-list li {
-    font-style: italic;
-    height: 60px;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: var(--transition-smooth);
-    position: relative;
-}
-
-.queue-list li:hover {
-    background: rgba(255, 255, 255, 0.06);
-    transform: scale(1.02);
-    border-color: rgba(255, 255, 255, 0.15);
-}
-
-.song-thumb {
-    width: 60px;
-    height: 45px;
-    border-radius: 12px;
-    background: #111;
-    object-fit: cover;
-    flex-shrink: 0;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-.song-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.song-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-}
-
-.song-meta {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    margin-top: 2px;
-}
-
-.next-tag {
-    position: absolute;
-    top: -8px;
-    right: 12px;
-    background: var(--accent-color);
-    color: white;
-    font-size: 9px;
-    font-weight: 800;
-    padding: 2px 8px;
-    border-radius: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    box-shadow: 0 4px 10px rgba(0, 122, 255, 0.4);
-    z-index: 2;
-}
-
-.queue-remove-btn {
-    background: rgba(255, 59, 48, 0.1);
-    color: #ff3b30;
-    width: 32px;
-    height: 32px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition-smooth);
-    opacity: 0.4;
-    flex-shrink: 0;
-}
-
-.queue-list li:hover .queue-remove-btn {
-    opacity: 1;
-}
-
-.queue-remove-btn:hover {
-    background: #ff3b30;
-    color: white;
-    transform: scale(1.1);
-}
-
-button.cancel-btn {
-    background: rgba(255, 59, 48, 0.15) !important;
-    border: 0.5px solid rgba(255, 59, 48, 0.3) !important;
-    color: #ff453a !important;
-}
-
-button.cancel-btn:hover {
-    background: rgba(255, 59, 48, 0.25) !important;
-    box-shadow: 0 0 15px rgba(255, 59, 48, 0.2);
-}
-
-/* Icons/Glyphs */
-.icon {
-    font-size: 18px;
-}
-
-/* Shortcuts Legend */
-.shortcuts-legend {
-    margin-top: 24px;
-    padding: 24px;
-    width: 100%;
-}
-
-/* Hide Shortcuts on Android App Native Layer */
-.android-app .shortcuts-legend {
-    display: none !important;
-}
-
-/* Empty Queue State */
-.empty-queue-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 30px !important;
-    text-align: center;
-    color: var(--text-secondary);
-    background: transparent !important;
-    border: 1px dashed rgba(255, 255, 255, 0.2) !important;
-}
-
-.empty-queue-state .icon {
-    font-size: 32px;
-    margin-bottom: 10px;
-    opacity: 0.5;
-}
-
-.empty-queue-state small {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    margin-top: 4px;
-}
-
-.shortcuts-legend h4 {
-    margin: 0 0 15px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-}
-
-.shortcut-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-}
-
-.shortcut-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.key {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 4px 10px;
-    border-radius: 10px;
-    font-weight: 700;
-    min-width: 32px;
-    text-align: center;
-    font-family: 'Outfit', sans-serif;
-    color: var(--text-primary);
-    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
-    font-size: 11px;
 }
 
 .score-meter-container {
@@ -1164,6 +622,345 @@ button.cancel-btn:hover {
     font-weight: 700;
     color: #00ffcc;
     min-width: 25px;
+}
+
+/* =========================================================================
+   STAGE OVERLAYS — queue (top-left) and QR (bottom-left), inside the video.
+   z-index 10 sits above the player surface (1) and the placeholder (2), but
+   below the play gate (90) and the score overlay (100), so the score screen
+   is never contaminated by queue chips.
+   ========================================================================= */
+.stage-overlay {
+    position: absolute;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border-radius: var(--overlay-radius);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    opacity: 0.94;
+    /* .glass-panel sets overflow:hidden, which would clip the queue strip's
+       horizontal scroll and swallow the chip shadows. Overridden here. */
+    overflow: visible;
+    /* .glass-panel:hover enlarges the shadow; an overlay sitting on the video
+       should not react to the pointer that is over the video. */
+    border-radius: var(--overlay-radius);
+    /* Keeps pointer events off the video behind it. */
+    touch-action: manipulation;
+    transition: var(--transition-fast);
+}
+
+/* Neutralise the inherited .glass-panel:hover: an overlay floating on the video
+   should not react to a pointer that is merely over the video. */
+.stage-overlay:hover {
+    border-color: var(--glass-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.stage-overlay--tl {
+    top: var(--overlay-gap);
+    left: var(--overlay-gap);
+    max-width: var(--overlay-max-w);
+}
+
+.stage-overlay--bl {
+    bottom: var(--overlay-gap);
+    left: var(--overlay-gap);
+    align-items: flex-start;
+}
+
+/* Transport controls: bottom-center INSIDE the stage. */
+.stage-controls {
+    position: absolute;
+    z-index: 11;
+    left: 50%;
+    bottom: 15px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--ctl-gap);
+    padding: 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    transition: var(--transition-fast);
+}
+
+/* Individually small, but the hit area stays at a comfortable touch size
+   via padding, so they remain tappable on a phone. */
+.stage-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ctl-size);
+    height: var(--ctl-size);
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: var(--transition-fast);
+}
+
+.stage-btn .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.stage-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.24);
+}
+
+.stage-btn:active { transform: scale(0.92); }
+
+.stage-btn--primary {
+    background: var(--accent-color);
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(0, 122, 255, 0.35);
+}
+
+.stage-btn--primary:hover { background: #0084ff; }
+
+.stage-btn--warn {
+    color: #ffb340;
+    border-color: rgba(255, 149, 0, 0.3);
+}
+
+.stage-btn--warn:hover {
+    background: rgba(255, 149, 0, 0.16);
+    border-color: rgba(255, 149, 0, 0.5);
+}
+
+/* Mic active state. */
+.stage-btn.active {
+    background: rgba(0, 255, 204, 0.2);
+    border-color: rgba(0, 255, 204, 0.5);
+}
+
+.stage-btn-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #00ffcc;
+    display: none;
+    box-shadow: 0 0 6px rgba(0, 255, 204, 0.8);
+}
+
+.stage-btn.active .stage-btn-dot { display: block; }
+
+/* QR overlay hidden state. */
+.stage-overlay.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.94);
+}
+
+/* Queue head + count badge */
+.queue-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.queue-head-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+
+.queue-count-badge {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--accent-color);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    /* Queue numbers grow as songs are added; proportional digits visibly jitter. */
+    font-variant-numeric: tabular-nums;
+}
+
+/* Horizontal strip of numbered chips */
+.queue-strip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    /* Horizontal swipe through a long queue must not scroll the page. */
+    overscroll-behavior: contain;
+    padding-bottom: 2px;
+}
+
+.queue-strip::-webkit-scrollbar { height: 3px; }
+.queue-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
+
+.queue-chip {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    height: var(--queue-chip-size);
+    min-width: var(--queue-chip-size);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    transition: var(--transition-fast);
+}
+
+.queue-chip.is-next {
+    background: rgba(0, 122, 255, 0.22);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 12px rgba(0, 122, 255, 0.25);
+}
+
+.queue-chip-num {
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* The remove ✕ is a <button>, so it needs an explicit touch target even though
+   the chip itself is only ~30px tall. */
+.queue-chip-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: var(--queue-chip-size);
+    margin: 0 4px 0 0;
+    padding: 0;
+    border: none;
+    border-radius: 0 8px 8px 0;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: var(--transition-fast);
+}
+
+.queue-chip-x:hover {
+    background: rgba(255, 59, 48, 0.25);
+    color: #ff6b63;
+}
+
+/* Under-strip line: the host's answer to "what plays next?" */
+.queue-next {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    max-width: 100%;
+    border-radius: 8px;
+    transition: background var(--transition-fast);
+}
+
+.queue-next-label {
+    flex: 0 0 auto;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.queue-next-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* Flashes when a reservation arrives from the phone. */
+.queue-next.is-flashing {
+    background: rgba(0, 122, 255, 0.28);
+    animation: nextFlash 900ms ease-out;
+}
+
+@keyframes nextFlash {
+    0% { background: rgba(0, 122, 255, 0.55); }
+    100% { background: rgba(0, 122, 255, 0); }
+}
+
+.queue-empty {
+    font-size: 10px;
+    font-style: normal;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+/* QR overlay. The player ID sits beside the label, mirroring the
+   queue's "Next | Title" row, and stays click-to-copy. */
+.qr-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* QR overlay */
+.qr-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* White plate is required: the library draws dark modules on a transparent
+   canvas, and dark modules on a dark theme are unscannable. */
+#qrStage {
+    line-height: 0;
+    padding: var(--qr-pad);
+    border-radius: 12px;
+    background: #fff;
+}
+
+#qrStage img,
+#qrStage canvas {
+    display: block;
+    width: var(--qr-size) !important;
+    height: var(--qr-size) !important;
+    /* Hard module edges. Without this the browser rescales the QR into a blur,
+       which is the usual cause of a code that looks right but will not scan. */
+    image-rendering: pixelated;
 }
 
 /* Score Overlay */
@@ -1254,68 +1051,6 @@ button.cancel-btn:hover {
         height: 3px;
     }
 
-    /* COMPACT 1-LINE CIRCULAR PLAYER CONTROLS */
-    .player-control-bar {
-        padding: 16px !important;
-        gap: 12px !important;
-        margin-top: 12px !important;
-    }
-    .pcb-left,
-    .pcb-center,
-    .pcb-right {
-        flex: 1 1 auto;
-        justify-content: center;
-    }
-    .pcb-center button {
-        width: var(--mobile-button-size, 44px) !important;
-        height: var(--mobile-button-size, 44px) !important;
-        min-width: var(--mobile-button-size, 44px) !important;
-        padding: 0 !important;
-        border-radius: 50% !important;
-        font-size: 0 !important;
-        flex-shrink: 0 !important;
-        position: relative !important;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
-    }
-    .pcb-center button .icon {
-        position: absolute !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        font-size: var(--mobile-icon-size, 18px) !important;
-        margin: 0 !important;
-        line-height: 1 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    .pcb-center button span {
-        display: none !important;
-    }
-    /* The pulse dot is the only mic feedback left once the label collapses,
-       so keep it visible as a small badge on the corner of the circle. */
-    .pcb-center button#audioStatus #micPulseIndicator {
-        display: block !important;
-        position: absolute !important;
-        top: 4px;
-        right: 4px;
-        width: 8px;
-        height: 8px;
-    }
-    .sidebar-search-actions {
-        flex-direction: row;
-    }
-    .sidebar-search-actions button {
-        flex: 1;
-    }
-    .qr-section {
-        padding: 16px;
-    }
-
-    /* 📱 COMPACT OVERLAYS: Avoid "zoomed-in" look and force it to fit perfectly inside video dimensions */
-    .score-overlay {
-        padding: 16px !important;
-    }
     .score-rank {
         font-size: 13px !important;
         letter-spacing: 2px !important;
@@ -1345,78 +1080,16 @@ button.cancel-btn:hover {
     .header-container {
         padding: 0 10px;
     }
-    .main-layout {
-        padding: 0 10px 24px;
-        gap: 14px;
-    }
-    .shortcuts-legend {
-        display: none !important;
-    }
-    .player-control-bar {
-        flex-wrap: wrap;
-        justify-content: center;
-        padding: 12px 16px;
-        gap: 12px;
-    }
-    .pcb-left,
-    .pcb-center,
-    .pcb-right {
-        flex: 1 1 auto;
-        justify-content: center;
-        flex-wrap: wrap;
-    }
-    .pcb-right {
-        width: 100%;
-    }
-    .sidebar-section {
-        padding: 16px;
-    }
-    .search-row {
-        flex-wrap: wrap;
-    }
-    .search-section .search-row button {
-        width: auto;
-        min-width: 110px;
-        height: auto;
-        padding: 10px 12px;
-    }
-    .sidebar-search-actions {
-        flex-wrap: wrap;
-    }
-    .queue-list li {
-        min-height: 56px;
-        height: auto;
-        padding: 10px 12px;
-    }
-    #sidebarSearchInput {
-        font-size: 16px; /* Prevent iOS zoom */
-    }
+
 }
 
 @media (max-width: 480px) {
     .header-container {
-        top: 8px;
-        margin-bottom: 12px;
+        top: max(6px, env(safe-area-inset-top, 0px));
     }
     .dynamic-island {
         border-radius: 999px;
         padding: 8px 14px;
-    }
-    .video-container {
-        border-radius: 18px;
-    }
-    .player-control-bar,
-    .queue-container,
-    .sidebar-section {
-        border-radius: 20px;
-        padding: 14px;
-    }
-    .search-section .search-row button {
-        width: 100%;
-        min-width: 0;
-    }
-    .sidebar-search-actions button {
-        width: 100%;
     }
     .score-overlay {
         padding: 18px;
@@ -1427,7 +1100,6 @@ button.cancel-btn:hover {
 @media (max-width: 540px) {
     .header-container {
         top: clamp(4px, 2vh, 16px);
-        margin-bottom: clamp(12px, 3vh, 28px);
     }
     .dynamic-island {
         padding: 8px 16px;
@@ -1437,18 +1109,6 @@ button.cancel-btn:hover {
         font-size: 12px;
     }
 
-    .left-panel {
-        gap: 12px;
-    }
-    .player-control-bar {
-        padding: 16px;
-        border-radius: 24px;
-        margin-top: 12px;
-    }
-    .queue-container {
-        padding: 16px;
-        border-radius: 24px;
-    }
     
     .score-number {
         font-size: 80px;
@@ -1457,55 +1117,8 @@ button.cancel-btn:hover {
 
 /* 4. ADVANCED MOBILE LANDSCAPE MODE (split-screen widescreen focus!) */
 @media (max-height: 600px) and (orientation: landscape) {
-    body {
-        padding: 0;
-        overflow-y: hidden; /* Lock viewport scroll in landscape */
-    }
-    .header-container {
-        display: none !important; /* Hide dynamic island to save precious vertical space */
-    }
-    .main-layout {
-        flex-direction: row !important;
-        align-items: stretch !important;
-        max-width: 100vw !important;
-        height: 100vh !important;
-        padding: 0 !important;
-        gap: 0 !important;
-    }
-    .left-panel {
-        flex: 1.6 !important;
-        height: 100vh !important;
-        border-radius: 0 !important;
-    }
-    .video-container {
-        height: 100vh !important;
-        width: 100% !important;
-        aspect-ratio: auto !important;
-        border-radius: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
-    .right-panel {
-        flex: 1 !important;
-        height: 100vh !important;
-        overflow-y: auto !important;
-        padding: 16px !important;
-        background: rgba(0, 0, 0, 0.45) !important;
-        backdrop-filter: blur(25px) !important;
-        -webkit-backdrop-filter: blur(25px) !important;
-        border-left: 1px solid var(--glass-border) !important;
-        border-radius: 0 !important;
-        position: static !important;
-        gap: 16px !important;
-    }
-    .player-control-bar {
-        margin-top: 0 !important;
-        padding: 16px !important;
-        border-radius: 20px !important;
-    }
-    .queue-container {
-        padding: 0 !important;
-    }
+    /* The stage is pinned to the viewport, so landscape only needs to tighten
+       the overlays and the score screen. */
     .welcome-content h1 {
         font-size: 24px !important;
     }
@@ -1539,6 +1152,7 @@ button.cancel-btn:hover {
         font-size: 11px !important;
         border-radius: 12px !important;
     }
+
 }
 
 /* =========================================================================
@@ -1546,13 +1160,10 @@ button.cancel-btn:hover {
    ========================================================================= */
 
 /* Add clear vertical margin to push content out from underneath the transparent status bar */
+/* The stage is position:fixed, so body padding cannot offset it. The overlays
+   already use env(safe-area-inset-*). */
 .android-app body {
-    padding-top: 44px !important; /* Standard status bar safe-area spacer */
-}
-
-/* Adjust header container sticky top behavior to slide underneath status bar beautifully */
-.android-app .header-container {
-    top: 44px !important;
+    padding-top: 0 !important;
 }
 
 /* =========================================================================
@@ -1620,10 +1231,7 @@ button.cancel-btn:hover {
     }
     .dynamic-island { min-width: 120px; padding: 6px 12px; border-radius: 30px; }
     .dynamic-island h2 { font-size: 10px; }
-    .song-thumb { width: 45px; height: 34px; }
-    .song-title { font-size: 12px; }
     .score-number { font-size: 48px !important; }
-    .player-control-bar, .queue-container { padding: 12px; border-radius: 20px; }
 }
 
 /* 6. Micro Handsets (Galaxy Fold, Small Displays < 280px) */
@@ -1821,4 +1429,145 @@ body.admin-page .modal-content {
     body.admin-page .song-card { padding: 14px; }
     body.admin-page .song-card .button-row { flex-direction: column; }
     body.admin-page .song-card .button-row button { width: 100%; }
+}
+
+/* Respect reduced-motion: the dynamic island floats forever, and it sits
+   directly above the new stage overlays. */
+@media (prefers-reduced-motion: reduce) {
+    .dynamic-island {
+        animation: none;
+    }
+    .queue-next.is-flashing {
+        animation: none;
+    }
+    .blob {
+        animation: none;
+    }
+    * {
+        scroll-behavior: auto !important;
+    }
+}
+
+/* =========================================================================
+   RESPONSIVE PASS — control bar wrapping + overlay scaling.
+   Overlays scale through --qr-size / --queue-chip-size so they shrink smoothly
+   rather than jumping between hardcoded layouts.
+   ========================================================================= */
+
+@media (max-width: 768px) {
+    :root {
+        --overlay-gap: 10px;
+        --overlay-max-w: 58%;
+    }
+    .queue-next-title {
+        -webkit-line-clamp: 1;
+    }
+}
+
+@media (max-width: 600px) {
+    :root {
+        --qr-size: 132px;
+        --qr-pad: 8px;
+        --queue-chip-size: 26px;
+        --overlay-gap: 8px;
+        --overlay-max-w: 64%;
+    }
+    .stage-overlay {
+        padding: 8px;
+        border-radius: 12px;
+    }
+    .queue-chip-num {
+        font-size: 11px;
+        padding: 0 6px;
+    }
+}
+
+@media (max-width: 430px) {
+    :root {
+        --qr-size: 104px;
+        --qr-pad: 6px;
+        --queue-chip-size: 24px;
+        --overlay-gap: 7px;
+        --overlay-max-w: 66%;
+    }
+    .queue-head-label,
+    .qr-label {
+        font-size: 8px;
+        letter-spacing: 0.8px;
+    }
+    .queue-next-title {
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 360px) {
+    :root {
+        --qr-size: 88px;
+        --qr-pad: 5px;
+        --queue-chip-size: 22px;
+    }
+}
+
+/* Landscape phones have almost no vertical room, so the overlays are capped as a
+   share of viewport height and the QR shrinks first. */
+@media (max-height: 600px) and (orientation: landscape) {
+    :root {
+        --qr-size: 96px;
+        --qr-pad: 6px;
+        --queue-chip-size: 22px;
+        --overlay-gap: 8px;
+        --overlay-max-w: 40%;
+    }
+    .stage-overlay {
+        max-height: 25vh;
+    }
+    .queue-strip {
+        flex-wrap: nowrap;
+    }
+}
+
+/* Safe areas: a notched phone must never clip the queue or the QR plate.
+   env() carries an explicit fallback so these declarations stay valid even in a
+   browser that parses env() but not the inset variables. */
+@supports (padding: max(0px)) {
+    .stage-overlay--tl {
+        top: max(var(--overlay-gap), env(safe-area-inset-top, 0px));
+        left: max(var(--overlay-gap), env(safe-area-inset-left, 0px));
+    }
+    .stage-overlay--bl {
+        bottom: max(var(--overlay-gap), env(safe-area-inset-bottom, 0px));
+        left: max(var(--overlay-gap), env(safe-area-inset-left, 0px));
+    }
+}
+
+/* Control strip scales with the stage. */
+@media (max-width: 600px) {
+    :root {
+        --ctl-size: 34px;
+        --ctl-gap: 5px;
+    }
+    .stage-controls { bottom: 38px; }
+    .stage-btn .icon { font-size: 13px; }
+}
+
+@media (max-width: 430px) {
+    :root {
+        --ctl-size: 30px;
+        --ctl-gap: 4px;
+    }
+    .stage-controls { bottom: 32px; }
+    .stage-btn {
+        min-width: 34px;
+        min-height: 34px;
+    }
+    .stage-btn .icon { font-size: 12px; }
+}
+
+/* Landscape phones: the strip hugs the bottom edge with minimal clearance. */
+@media (max-height: 600px) and (orientation: landscape) {
+    :root {
+        --ctl-size: 30px;
+        --ctl-gap: 4px;
+    }
+    .stage-controls { bottom: 30px; }
 }
