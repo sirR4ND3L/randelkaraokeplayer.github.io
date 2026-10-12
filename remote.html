@@ -35,6 +35,9 @@
             --success: #30d158;
             --danger: #ff453a;
             --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Interactive states must feel instant on a phone; 0.4s is reserved
+               for the songbook expand only. */
+            --transition-fast: 160ms cubic-bezier(0.4, 0, 0.2, 1);
             --page-x: clamp(12px, 4vw, 20px);
             --page-y: clamp(12px, 4vw, 18px);
             --card-pad: clamp(16px, 5vw, 26px);
@@ -128,10 +131,17 @@
         }
 
         .status-dot.online { background: var(--success); box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.5); animation: pulse 1.8s ease-out infinite; }
+        .status-dot.offline { background: rgba(255, 255, 255, 0.22); }
+        .status-dot.connecting { background: #ff9f0a; animation: pulseAmber 1.2s ease-out infinite; }
 
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.5); }
             100% { box-shadow: 0 0 0 10px rgba(48, 209, 88, 0); }
+        }
+
+        @keyframes pulseAmber {
+            0% { box-shadow: 0 0 0 0 rgba(255, 159, 10, 0.45); }
+            100% { box-shadow: 0 0 0 10px rgba(255, 159, 10, 0); }
         }
 
         .player-pill .short-no-badge { font-weight: 700; color: var(--accent-color); }
@@ -175,7 +185,7 @@
         .remote-stack { display: grid; gap: var(--stack-gap); max-width: 640px; margin: 0 auto; min-width: 0; }
 
         /* Quick search */
-        .search-row { display: flex; gap: 10px; }
+        .search-row { display: flex; align-items: center; gap: 10px; }
 
         .search-input-wrapper { flex: 1; position: relative; min-width: 0; }
 
@@ -204,34 +214,105 @@
 
         .search-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 
+        /* Locks both actions while a command is in flight so a second tap
+           cannot fire a duplicate command while the first is still polling. */
+        .search-actions.busy { opacity: 0.45; pointer-events: none; }
+
+        /* Base button is neutral glass. The accent colour lives in .btn-primary so
+           that adding the mode toggle, the songbook toggle and 12 pad keys cannot
+           flood the screen with blue. Rule of thumb: one accent element per card. */
         button {
-            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
-            color: white;
-            border: 1px solid rgba(0, 122, 255, 0.3);
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: var(--glass-light);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
             padding: 12px 20px;
             border-radius: 28px;
             cursor: pointer;
             min-height: 48px;
             font-size: 15px;
             font-weight: 600;
-            transition: var(--transition);
-            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.25);
+            font-family: inherit;
+            transition: var(--transition-fast);
             -webkit-tap-highlight-color: transparent;
             -webkit-touch-callout: none;
             touch-action: manipulation;
+            user-select: none;
         }
 
-        button:active { transform: scale(0.97); box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); }
+        button:active { transform: scale(0.97); }
 
-        button:disabled { opacity: 0.6; pointer-events: none; }
+        button:disabled { opacity: 0.55; pointer-events: none; }
 
-        button.reserve {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid var(--glass-border-hover);
-            box-shadow: none;
+        button.btn-primary {
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            border-color: rgba(0, 122, 255, 0.3);
+            color: #fff;
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.25);
         }
 
-        button.reserve:active { background: rgba(255, 255, 255, 0.18); }
+        button.btn-primary:active { box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); }
+
+        button.btn-glass:hover,
+        button.btn-glass:active { background: rgba(255, 255, 255, 0.16); border-color: var(--glass-border-hover); }
+
+        button.btn-ghost {
+            background: transparent;
+            border-color: var(--glass-border);
+            color: var(--text-tertiary);
+            font-weight: 500;
+        }
+
+        button.btn-ghost:hover { color: var(--text-secondary); border-color: var(--glass-border-hover); }
+
+        /* Compact pill used by the search-mode and songbook toggles. */
+        button.toggle-btn {
+            min-height: 38px;
+            padding: 7px 15px;
+            font-size: 12px;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            border-radius: 22px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        button.toggle-btn.active {
+            background: rgba(0, 122, 255, 0.22);
+            border-color: rgba(0, 122, 255, 0.55);
+            color: var(--accent-color);
+        }
+
+        button.toggle-btn.off { color: var(--text-tertiary); }
+
+        :focus-visible {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+        }
+
+        /* Zero-shift loading state: the label stays in flow and the spinner is
+           painted on top of it, so the button never changes width. */
+        button.loading .btn-label { visibility: hidden; }
+
+        button.loading::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.28);
+            border-top-color: currentColor;
+            animation: btnSpin 0.7s linear infinite;
+        }
+
+        @keyframes btnSpin { to { transform: rotate(360deg); } }
 
         button.success-state {
             background: rgba(48, 209, 88, 0.25) !important;
@@ -329,6 +410,117 @@
 
         .empty-state { text-align: center; color: var(--text-tertiary); padding: 30px 0; font-size: 13px; }
 
+        /* Songbook panel header + collapse */
+        .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
+        .card-head .card-label { margin: 0; }
+
+        #songbookCount {
+            font-weight: 600;
+            color: var(--accent-color);
+            letter-spacing: 0;
+        }
+
+        .songbook-summary { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
+
+        /* Animate the row track rather than max-height: no guessed pixel value
+           and no jank when the list is long. visibility flips after the
+           transition so collapsed controls leave the tab order. */
+        .songbook-body {
+            display: grid;
+            grid-template-rows: 1fr;
+            transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
+        }
+
+        .songbook-body.collapsed {
+            grid-template-rows: 0fr;
+            visibility: hidden;
+            transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s 0.35s;
+        }
+
+        .songbook-inner { overflow: hidden; min-height: 0; }
+
+        /* Songbook loading skeleton — shows "(No songs loaded)" today, which
+           reads as a broken songbook on slow venue Wi-Fi. */
+        .song-row.skeleton { pointer-events: none; }
+        .song-row.skeleton .num { background: var(--glass-light); }
+
+        .song-row .sk {
+            height: 10px;
+            border-radius: 6px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+            background-size: 200% 100%;
+            animation: shimmer 1.2s linear infinite;
+        }
+
+        @keyframes shimmer {
+            from { background-position: 200% 0; }
+            to { background-position: -200% 0; }
+        }
+
+        /* Long titles stay readable instead of collapsing to one ellipsised line. */
+        .song-row .meta .title {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            white-space: normal;
+        }
+
+        /* Number pad */
+        #numberPad { display: grid; gap: 10px; margin-top: 16px; }
+        #numberPad.hidden { display: none; }
+
+        .pad-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .pad-head .card-label { margin: 0; }
+
+        .pad-preview {
+            min-height: 46px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 18px;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            font-size: 14px;
+            overflow: hidden;
+        }
+
+        .pad-preview .pp-title {
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pad-preview .pp-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pad-preview.hit { border-color: rgba(0, 122, 255, 0.55); box-shadow: 0 0 24px var(--accent-glow); }
+        .pad-preview.hint-state { color: var(--text-tertiary); font-size: 13px; }
+
+        .pad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+        button.pad-key {
+            min-height: 58px;
+            font-size: 22px;
+            font-weight: 400;
+            border-radius: 20px;
+        }
+
+        button.pad-key:active { transform: scale(0.94); background: rgba(255, 255, 255, 0.18); }
+        button.pad-key .glyph { font-size: 19px; font-weight: 500; }
+        button.pad-key.action-key { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+
+        /* Long-press backspace clears the whole code. touch-action:none stops a
+           vertical scroll from cancelling the hold halfway through. */
+        button.pad-key.hold-key { touch-action: none; }
+        button.pad-key.holding { background: rgba(255, 255, 255, 0.2); border-color: var(--glass-border-hover); }
+
         /* Modal */
         .song-modal-overlay {
             position: fixed;
@@ -340,7 +532,11 @@
             justify-content: center;
             align-items: center;
             z-index: 5000;
-            padding: clamp(12px, 4vw, 20px);
+            padding:
+                calc(clamp(12px, 4vw, 20px) + env(safe-area-inset-top))
+                calc(clamp(12px, 4vw, 20px) + env(safe-area-inset-right))
+                calc(clamp(12px, 4vw, 20px) + env(safe-area-inset-bottom))
+                calc(clamp(12px, 4vw, 20px) + env(safe-area-inset-left));
             animation: modalFadeIn 0.25s ease;
         }
 
@@ -379,13 +575,6 @@
         .song-modal .song-artist { margin: 0 0 22px; color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; }
 
         .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-        .modal-cancel {
-            background: transparent !important;
-            border: 1px solid var(--glass-border) !important;
-            box-shadow: none !important;
-            color: var(--text-tertiary) !important;
-            font-weight: 500 !important;
-        }
 
         /* Scanner */
         .scanner-overlay {
@@ -398,7 +587,11 @@
             justify-content: center;
             align-items: center;
             z-index: 5500;
-            padding: clamp(12px, 4vw, 24px);
+            padding:
+                calc(clamp(12px, 4vw, 24px) + env(safe-area-inset-top))
+                calc(clamp(12px, 4vw, 24px) + env(safe-area-inset-right))
+                calc(clamp(12px, 4vw, 24px) + env(safe-area-inset-bottom))
+                calc(clamp(12px, 4vw, 24px) + env(safe-area-inset-left));
             animation: modalFadeIn 0.25s ease;
         }
 
@@ -475,10 +668,12 @@
         .toast.success { border-color: rgba(48, 209, 88, 0.5); }
         .toast.error { border-color: rgba(255, 69, 58, 0.5); }
         .toast .sub { display: block; font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+        .toast.dismissing { animation: toastOut 0.26s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
         @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes modalSlideUp { from { opacity: 0; transform: translateY(24px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateY(10px) scale(0.97); } }
 
         .hidden { display: none !important; }
 
@@ -491,10 +686,16 @@
                 --page-y: 10px;
             }
 
-            .search-actions { grid-template-columns: 1fr; }
+            /* Keep Play Now | Reserve side by side: the pair is one decision and
+               splitting it costs a thumb movement on every song. */
+            .search-actions { gap: 8px; }
+            .search-actions button { padding: 12px 10px; font-size: 14px; }
             .modal-actions { grid-template-columns: 1fr; }
             .remote-header { margin-bottom: 14px; }
+            /* Chrome ignores ::-webkit-scrollbar once scrollbar-width is set, so both are
+               needed to actually hide the track on phones. */
             .song-list::-webkit-scrollbar { width: 0; height: 0; }
+            .song-list { scrollbar-width: none; }
             .toast-container { width: calc(100vw - 24px); }
             .toast { font-size: 13.5px; }
         }
@@ -511,6 +712,8 @@
             .song-row .meta .artist { font-size: 11.5px; }
             .song-list { max-height: min(50dvh, 420px); }
             .pair-card p { font-size: 13px; }
+            button.toggle-btn { padding: 6px 10px; font-size: 11px; }
+            button.pad-key { min-height: 50px; font-size: 20px; }
         }
 
         /* Wide phones, tablets, desktop */
@@ -532,17 +735,47 @@
             .remote-header { margin-bottom: 10px; }
             .player-pill { padding: 6px 12px; font-size: 12px; gap: 7px; }
             .card-label { margin-bottom: 8px; }
+            .card-head { margin-bottom: 8px; }
             .search-input-wrapper input, .song-filter { padding: 9px 14px; }
             button { min-height: 42px; padding: 8px 16px; font-size: 13px; }
             .song-list { max-height: min(50dvh, 380px); }
             .song-modal { max-height: calc(100dvh - 24px); }
             .song-modal h2 { font-size: clamp(16px, 4.5vw, 20px); }
             .song-modal .song-artist { font-size: 13px; }
+
+            /* Two-column modal: text on the left, actions on the right, so a
+               short landscape viewport never needs to scroll a dialog. */
+            .song-modal {
+                max-width: 560px;
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 6px 20px;
+                align-items: center;
+                text-align: left;
+            }
+            .song-modal .song-number-badge { grid-column: 1; justify-self: start; margin-bottom: 0; }
+            .song-modal h2 { grid-column: 1; margin: 0; }
+            .song-modal .song-artist { grid-column: 1; margin: 0; }
+            .song-modal .modal-actions { grid-column: 2; grid-row: 1 / span 3; grid-template-columns: 1fr; margin: 0; align-self: center; }
+            .song-modal .btn-ghost { grid-column: 1 / -1; }
+
+            /* The keypad becomes two rows of six (1-9, C, 0, backspace). */
+            #numberPad { grid-template-columns: 1fr; margin-top: 10px; }
+            .pad-head { margin-bottom: 0; }
+            .pad-head .card-label { font-size: 10px; }
+            button.toggle-btn { min-height: 32px; padding: 5px 12px; font-size: 11px; }
+            .pad-preview { min-height: 34px; padding: 5px 14px; }
+            .pad-preview .pp-sub { display: none; }
+            .pad-grid { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+            button.pad-key { min-height: 42px; font-size: 18px; border-radius: 16px; }
+            button.pad-key.action-key { font-size: 13px; }
         }
 
         /* Touch-only: no sticky hover state */
         @media (hover: none) {
             .song-row:hover { border-color: var(--glass-border); background: var(--glass-light); }
+            button.btn-glass:hover { background: var(--glass-light); }
+            button.btn-ghost:hover { color: var(--text-tertiary); }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -568,7 +801,7 @@
         <h2>Not paired with a player</h2>
         <p>Scan the QR code shown on the Karaoke Player screen to connect.</p>
         <div class="search-actions" style="grid-template-columns:1fr;">
-            <button id="scanBtn" onclick="openScanner()">📷 Scan Player QR</button>
+            <button id="scanBtn" class="btn-primary" type="button" onclick="openScanner()">📷 Scan Player QR</button>
         </div>
     </section>
 
@@ -580,21 +813,52 @@
                 <div class="search-input-wrapper">
                     <input type="text" id="quickSearchInput" placeholder="Search the title songs..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-label="Quick song search">
                 </div>
+                <button id="quickModeToggle" class="toggle-btn" type="button" onclick="toggleQuickMode()" aria-pressed="false">Number Search</button>
             </div>
-            <div class="search-actions">
-                <button id="quickPlayBtn" onclick="quickText(true)">▶ Play Now</button>
-                <button id="quickReserveBtn" class="reserve" onclick="quickText(false)">Reserve</button>
+            <div class="search-actions" id="quickActions">
+                <button id="quickPlayBtn" class="btn-primary" type="button" onclick="quickText(true)"><span class="btn-label">▶ Play Now</span></button>
+                <button id="quickReserveBtn" class="btn-glass" type="button" onclick="quickText(false)"><span class="btn-label">Reserve</span></button>
             </div>
             <p id="quickHint" class="hint-text">Not in the songbook? Search by title/artist for best results.</p>
+
+            <!-- Number pad: only visible in Number Search mode -->
+            <div id="numberPad" class="hidden">
+                <div class="pad-head">
+                    <p class="card-label">Song Number</p>
+                    <button id="padSoundBtn" class="toggle-btn" type="button" onclick="togglePadSound()" aria-pressed="true">🔊 Sound</button>
+                </div>
+                <div id="padPreview" class="pad-preview hint-state" aria-live="polite">Enter a songbook number</div>
+                <div class="pad-grid" role="group" aria-label="Number keypad">
+                    <button class="pad-key" type="button" onclick="pressPadKey('1')" aria-label="1">1</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('2')" aria-label="2">2</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('3')" aria-label="3">3</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('4')" aria-label="4">4</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('5')" aria-label="5">5</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('6')" aria-label="6">6</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('7')" aria-label="7">7</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('8')" aria-label="8">8</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('9')" aria-label="9">9</button>
+                    <button class="pad-key action-key" type="button" onclick="padClear()" aria-label="Clear">C</button>
+                    <button class="pad-key" type="button" onclick="pressPadKey('0')" aria-label="0">0</button>
+                    <button class="pad-key action-key hold-key" type="button" onclick="padBackspace()" onpointerdown="startPadHold(this)" onpointerup="cancelPadHold(this)" onpointerleave="cancelPadHold(this)" onpointercancel="cancelPadHold(this)" aria-label="Backspace, hold to clear"><span class="glyph">⌫</span></button>
+                </div>
+            </div>
         </section>
 
         <!-- Songbook -->
         <section class="glass-card">
-            <p class="card-label">Songbook</p>
-            <input type="text" id="songFilter" class="song-filter" placeholder="🔍 Filter title or artist..." oninput="filterSongs()" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Filter songbook">
-            <p class="hint-text" style="margin:0 0 12px;">Tap a song to play or reserve it.</p>
-            <div id="songList" class="song-list"></div>
-            <p id="songEmpty" class="empty-state">(No songs loaded)</p>
+            <div class="card-head">
+                <p class="card-label">Songbook <span id="songbookCount"></span></p>
+                <button id="songbookToggle" class="toggle-btn" type="button" onclick="toggleSongbook()" aria-expanded="true" aria-controls="songbookBody">Hide</button>
+            </div>
+            <div id="songbookBody" class="songbook-body">
+                <div class="songbook-inner">
+                    <input type="text" id="songFilter" class="song-filter" placeholder="🔍 Filter title, artist or number..." oninput="onFilterInput()" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Filter songbook">
+                    <div id="songList" class="song-list"></div>
+                    <p id="songEmpty" class="empty-state">(Loading songs...)</p>
+                </div>
+            </div>
+            <p id="songbookSummary" class="songbook-summary"></p>
         </section>
     </div>
 
@@ -605,10 +869,10 @@
             <h2 id="songModalTitle">Song Title</h2>
             <p id="songModalArtist" class="song-artist">Artist Name</p>
             <div class="modal-actions">
-                <button onclick="sendModalAction(true)">▶ Play Now</button>
-                <button class="reserve" onclick="sendModalAction(false)">Reserve</button>
+                <button id="modalPlayBtn" class="btn-primary" type="button" onclick="sendModalAction(true)"><span class="btn-label">▶ Play Now</span></button>
+                <button id="modalReserveBtn" class="btn-glass" type="button" onclick="sendModalAction(false)"><span class="btn-label">Reserve</span></button>
             </div>
-            <button class="modal-cancel" onclick="closeSongModal()">Cancel</button>
+            <button class="btn-ghost" type="button" onclick="closeSongModal()">Cancel</button>
         </div>
     </div>
 
@@ -622,8 +886,8 @@
             </div>
             <p id="scannerStatus" class="hint-text" style="text-align:center;margin-top:12px;">Starting camera...</p>
             <div class="search-actions" style="margin-top:14px;">
-                <button id="torchBtn" class="reserve hidden" onclick="toggleTorch()">🔦 Torch</button>
-                <button class="modal-cancel" onclick="closeScanner()">Cancel</button>
+                <button id="torchBtn" class="btn-glass hidden" type="button" onclick="toggleTorch()">🔦 Torch</button>
+                <button class="btn-ghost" type="button" onclick="closeScanner()">Cancel</button>
             </div>
         </div>
     </div>
@@ -641,12 +905,44 @@
                 'UCutZyApGOjqhOS-pp7yAj4Q', // ATOME KARAOKE
                 'UCNbFgUCJj2Ls6LVzBbL8fqA', // KARAOKETV
                 'UCjpmz7p9aFNuHP_AuQDxYRw'  // HARANA KARAOKE
-            ]
+            ],
+            // Digit feedback for the number pad. Copied from app.js so both
+            // screens speak with the same voice.
+            NUMBER_SOUND_EFFECTS: {
+                1: 'soundEffects/one.mp3',
+                2: 'soundEffects/two.mp3',
+                3: 'soundEffects/three.mp3',
+                4: 'soundEffects/four.mp3',
+                5: 'soundEffects/five.mp3',
+                6: 'soundEffects/six.mp3',
+                7: 'soundEffects/seven.mp3',
+                8: 'soundEffects/eight.mp3',
+                9: 'soundEffects/nine.mp3',
+                0: 'soundEffects/zero.mp3'
+            },
+            // Songbook numbers come from karaoke_search_cache.id, which the
+            // player resolves through CACHE_ENDPOINT?id=<code>.
+            MAX_CODE_LENGTH: 6,
+            MAX_RENDERED_SONGS: 300,
+            // Matches the app.js polling window: 10 attempts x 2s.
+            COMMAND_POLL_INTERVAL: 2000,
+            COMMAND_MAX_ATTEMPTS: 10
+        };
+
+        // Every haptic pattern in one place so the remote feels consistent.
+        const HAPTICS = {
+            toggle: 6,
+            pad: 8,
+            scan: 20,
+            send: 10,
+            ack: 15,
+            fail: [30, 40, 30]
         };
 
         const supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
         let allSongsData = [];
+        let songByCode = new Map();
         let currentSong = null;          // { code, title, artist }
         let playerId = null;
         let wakeLock = null;
@@ -657,6 +953,36 @@
         let scanCanvas = null;
         let lastScanAt = 0;
         let torchOn = false;
+
+        // --- UI state ---
+        let quickMode = 'text';                       // 'text' | 'number'
+        let padSoundOn = readPref('rk_remote_pad_sound', true);
+        let songbookOpen = readPref('rk_remote_songbook', true);
+        let padAudioPool = null;
+        let songbookLoading = false;
+        let songbookError = false;
+        let commandInFlight = false;
+        let restoreTimers = {};
+        let filterTimer = null;
+        let skeletonTimer = null;
+        let holdTimer = null;
+        let lastSeenAt = 0;
+
+        // ---------------------------------------------------------------
+        // Small helpers
+        // ---------------------------------------------------------------
+        function el(id) { return document.getElementById(id); }
+
+        function readPref(key, fallback) {
+            try {
+                const raw = localStorage.getItem(key);
+                return raw === null ? fallback : raw === 'true';
+            } catch (e) { return fallback; }
+        }
+
+        function writePref(key, value) {
+            try { localStorage.setItem(key, String(value)); } catch (e) {}
+        }
 
         // ---------------------------------------------------------------
         // Pairing / identity
@@ -831,9 +1157,9 @@
         async function handleScan(text) {
             const pid = parseScannedId(text);
             if (!pid) return;
-            vibrate(20);
+            vibrate(HAPTICS.scan);
             closeScanner();
-            showToast('Player found', 'success', 'P-' + pid.slice(-6).toUpperCase());
+            showToast('Player found', 'success', shortPlayerId());
             connect(pid);
         }
 
@@ -868,16 +1194,22 @@
         // ---------------------------------------------------------------
         function watchPlayerStatus(pid) {
             if (presenceTimer) clearInterval(presenceTimer);
-            setOnline(false);
+            lastSeenAt = 0;
+            setStatus('connecting');
 
             const check = async () => {
                 try {
                     const { data } = await supabaseClient.from('online_players')
                         .select('last_seen').eq('player_id', pid).maybeSingle();
-                    const lastSeen = data && data.last_seen ? new Date(data.last_seen).getTime() : 0;
-                    setOnline(!!data && (Date.now() - lastSeen) < 30000);
+                    if (data && data.last_seen) {
+                        lastSeenAt = new Date(data.last_seen).getTime();
+                        setStatus((Date.now() - lastSeenAt) < 30000 ? 'online' : 'offline');
+                    } else {
+                        // The player may simply not have checked in yet.
+                        setStatus('connecting');
+                    }
                 } catch (err) {
-                    setOnline(false);
+                    setStatus('offline');
                 }
             };
 
@@ -885,63 +1217,157 @@
             presenceTimer = setInterval(check, 5000);
         }
 
-        function setOnline(isOnline) {
-            document.getElementById('statusDot').classList.toggle('online', isOnline);
+        function shortPlayerId() {
+            return playerId ? 'P-' + playerId.slice(-6).toUpperCase() : '';
+        }
+
+        function agoLabel(ms) {
+            const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
+            if (secs < 60) return secs + 's ago';
+            const mins = Math.round(secs / 60);
+            if (mins < 60) return mins + 'm ago';
+            return Math.round(mins / 60) + 'h ago';
+        }
+
+        function setStatus(state) {
+            const dot = el('statusDot');
+            if (!dot) return;
+            dot.classList.remove('online', 'offline', 'connecting');
+            dot.classList.add(state);
+
+            const pill = el('playerPill');
+            if (!pill) return;
+            if (state === 'online') {
+                pill.title = (playerId || '') + ' (tap to copy)';
+            } else if (state === 'connecting') {
+                pill.title = 'Reaching ' + shortPlayerId() + '…';
+            } else {
+                pill.title = 'Player offline — last seen ' + (lastSeenAt ? agoLabel(lastSeenAt) : 'never');
+            }
         }
 
         // ---------------------------------------------------------------
         // Songbook
         // ---------------------------------------------------------------
-        async function loadSongbook() {
-            const { data, error } = await supabaseClient
-                .from('karaoke_search_cache')
-                .select('id, video_title')
-                .eq('is_verified', true)
-                .order('video_title', { ascending: true });
+        const EMPTY_COPY = {
+            loading: '(Loading songs…)',
+            error: '(Could not load the songbook)',
+            empty: '(No songs loaded)',
+            nomatch: '(No songs match your filter)'
+        };
 
-            if (error) {
-                console.error('Songbook load error:', error);
-                showToast('Could not load the songbook', 'error', error.message);
-                return;
+        async function loadSongbook() {
+            songbookLoading = true;
+            songbookError = false;
+            clearTimeout(skeletonTimer);
+            setEmptyState('loading');
+            // Only flash a skeleton if the fetch is genuinely slow, otherwise it
+            // just flickers on a warm cache.
+            skeletonTimer = setTimeout(() => {
+                if (songbookLoading) showSkeleton();
+            }, 300);
+
+            let failure = null;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('karaoke_search_cache')
+                    .select('id, video_title')
+                    .eq('is_verified', true)
+                    .order('video_title', { ascending: true });
+
+                if (error) failure = error;
+                else {
+                    allSongsData = (data || []).map(song => {
+                        const parts = String(song.video_title).split(' - ');
+                        const title = parts[0];
+                        const artist = parts.slice(1).join(' - ') || 'N/A';
+                        const code = String(song.id);
+                        return { code, title, artist, search: (code + ' ' + title + ' ' + artist).toUpperCase() };
+                    });
+                }
+            } catch (err) {
+                failure = err;
             }
 
-            allSongsData = (data || []).map(song => {
-                const parts = song.video_title.split(' - ');
-                return {
-                    code: String(song.id),
-                    title: parts[0],
-                    artist: parts.slice(1).join(' - ') || 'N/A'
-                };
-            });
+            clearTimeout(skeletonTimer);
+            songbookLoading = false;
+            songbookError = !!failure;
+            buildSongIndex();
 
-            renderSongbook();
+            if (failure) {
+                console.error('Songbook load error:', failure);
+                showToast('Could not load the songbook', 'error', failure.message || '');
+            }
+
+            // Re-renders the list and picks the right empty-state copy.
+            applyFilter();
         }
 
-        function renderSongbook() {
-            const list = document.getElementById('songList');
-            const empty = document.getElementById('songEmpty');
-            empty.classList.toggle('hidden', allSongsData.length > 0);
-            list.innerHTML = allSongsData.map(song => {
-                const title = escapeHtml(song.title);
-                const artist = escapeHtml(song.artist);
-                return `
-                <div class="song-row" data-code="${song.code}">
-                    <div class="num">${song.code}</div>
-                    <div class="meta">
-                        <div class="title">${title}</div>
-                        <div class="artist">${artist}</div>
-                    </div>
-                </div>`;
-            }).join('');
+        function buildSongIndex() {
+            songByCode = new Map();
+            allSongsData.forEach(song => songByCode.set(song.code, song));
+        }
 
-            list.onclick = (e) => {
-                const row = e.target.closest('.song-row');
-                if (!row || !row.dataset.code) return;
-                const song = allSongsData.find(s => String(s.code) === row.dataset.code);
-                if (song) openSongModal(song.code, song.title, song.artist);
-            };
+        function showSkeleton() {
+            el('songList').innerHTML = new Array(6).fill(
+                '<div class="song-row skeleton"><div class="num"></div><div class="meta">' +
+                '<div class="sk" style="width:72%"></div>' +
+                '<div class="sk" style="width:45%;margin-top:8px"></div>' +
+                '</div></div>'
+            ).join('');
+        }
 
-            filterSongs();
+        function setEmptyState(kind) {
+            const node = el('songEmpty');
+            if (!node) return;
+            node.innerText = EMPTY_COPY[kind] || '';
+            node.classList.toggle('hidden', !kind);
+        }
+
+        // Debounced: typing a title re-renders a few hundred rows, which is not
+        // something to do on every single keystroke.
+        function onFilterInput() {
+            clearTimeout(filterTimer);
+            filterTimer = setTimeout(applyFilter, 80);
+        }
+
+        function applyFilter() {
+            const list = el('songList');
+            if (!list) return;
+
+            const needle = el('songFilter').value.trim().toUpperCase();
+            const matches = needle
+                ? allSongsData.filter(song => song.search.indexOf(needle) > -1)
+                : allSongsData;
+
+            const shown = matches.slice(0, CONFIG.MAX_RENDERED_SONGS);
+            list.innerHTML = shown.map(songRowHtml).join('') +
+                (matches.length > shown.length ? truncateNotice(matches.length, shown.length) : '');
+
+            if (songbookLoading) setEmptyState('loading');
+            else if (songbookError) setEmptyState('error');
+            else if (!allSongsData.length) setEmptyState('empty');
+            else if (!shown.length) setEmptyState('nomatch');
+            else setEmptyState('none');
+
+            el('songbookCount').innerText = allSongsData.length
+                ? '(' + (needle ? matches.length : allSongsData.length).toLocaleString() + ')'
+                : '';
+            updateSongbookSummary();
+        }
+
+        function songRowHtml(song) {
+            return '<div class="song-row" data-code="' + escapeHtml(song.code) + '">' +
+                '<div class="num">' + escapeHtml(song.code) + '</div>' +
+                '<div class="meta">' +
+                '<div class="title">' + escapeHtml(song.title) + '</div>' +
+                '<div class="artist">' + escapeHtml(song.artist) + '</div>' +
+                '</div></div>';
+        }
+
+        function truncateNotice(total, shown) {
+            return '<p class="empty-state">Showing ' + shown.toLocaleString() + ' of ' +
+                total.toLocaleString() + ' — refine your filter to narrow it down.</p>';
         }
 
         function escapeHtml(str) {
@@ -950,17 +1376,205 @@
             })[c]);
         }
 
-        function filterSongs() {
-            const filter = document.getElementById('songFilter').value.toUpperCase();
-            const rows = document.querySelectorAll('#songList .song-row');
-            rows.forEach(row => {
-                row.style.display = row.innerText.toUpperCase().indexOf(filter) > -1 ? '' : 'none';
-            });
+        // Event delegation survives the innerHTML rewrite that applyFilter()
+        // performs, so the handler is bound once.
+        function onSongListClick(e) {
+            const row = e.target.closest('.song-row');
+            if (!row || !row.dataset.code || row.classList.contains('skeleton')) return;
+            const song = songByCode.get(row.dataset.code);
+            if (song) openSongModal(song.code, song.title, song.artist);
+        }
+
+        // filterSongs() is the legacy inline handler name; keep it working.
+        function filterSongs() { applyFilter(); }
+
+        function updateSongbookSummary() {
+            const node = el('songbookSummary');
+            if (!node) return;
+            if (!allSongsData.length) { node.innerText = ''; return; }
+            node.innerText = songbookOpen
+                ? 'Tap a song to play or reserve it.'
+                : allSongsData.length.toLocaleString() + ' songs — tap Show to browse.';
+        }
+
+        function setSongbookOpen(open) {
+            songbookOpen = open;
+            writePref('rk_remote_songbook', open);
+
+            const body = el('songbookBody');
+            const btn = el('songbookToggle');
+            body.classList.toggle('collapsed', !open);
+            btn.innerText = open ? 'Hide' : 'Show';
+            btn.setAttribute('aria-expanded', String(open));
+            updateSongbookSummary();
+        }
+
+        function toggleSongbook() {
+            vibrate(HAPTICS.toggle);
+            setSongbookOpen(!songbookOpen);
         }
 
         // ---------------------------------------------------------------
         // Quick search (mirrors index.html sidebar logic)
         // ---------------------------------------------------------------
+        function toggleQuickMode() {
+            quickMode = quickMode === 'text' ? 'number' : 'text';
+            vibrate(HAPTICS.toggle);
+            syncQuickModeUI();
+        }
+
+        function syncQuickModeUI() {
+            const isNumber = quickMode === 'number';
+            const toggle = el('quickModeToggle');
+            const input = el('quickSearchInput');
+
+            // The label always names the mode you would switch TO.
+            toggle.classList.toggle('active', isNumber);
+            toggle.setAttribute('aria-pressed', String(isNumber));
+            toggle.innerText = isNumber ? 'Text Search' : 'Number Search';
+
+            input.setAttribute('inputmode', isNumber ? 'numeric' : 'text');
+            input.setAttribute('pattern', isNumber ? '[0-9]*' : '');
+            input.placeholder = isNumber ? 'Enter song number…' : 'Search the title songs...';
+            input.setAttribute('aria-label', isNumber ? 'Songbook number' : 'Quick song search');
+
+            el('numberPad').classList.toggle('hidden', !isNumber);
+            el('quickHint').innerText = isNumber
+                ? 'Tap the keypad to enter the songbook number.'
+                : 'Not in the songbook? Search by title/artist for best results.';
+
+            input.value = '';
+            updatePadPreview();
+        }
+
+        function sanitizeNumberInput(raw) {
+            return String(raw || '').replace(/\D/g, '').slice(0, CONFIG.MAX_CODE_LENGTH);
+        }
+
+        // Physical and paste input still has to stay numeric in number mode.
+        function onQuickInput() {
+            if (quickMode !== 'number') return;
+            const input = el('quickSearchInput');
+            const clean = sanitizeNumberInput(input.value);
+            if (clean !== input.value) input.value = clean;
+            updatePadPreview();
+        }
+
+        function resolveSongByCode(code) {
+            if (!code) return null;
+            return songByCode.get(String(code).trim()) || null;
+        }
+
+        function updatePadPreview() {
+            const box = el('padPreview');
+            if (!box) return;
+            const code = sanitizeNumberInput(el('quickSearchInput').value);
+
+            if (!code) {
+                box.className = 'pad-preview hint-state';
+                box.innerText = 'Enter a songbook number';
+                return;
+            }
+
+            const song = resolveSongByCode(code);
+            if (song) {
+                box.className = 'pad-preview hit';
+                box.innerHTML = '<span class="pp-title"></span><span class="pp-sub"></span>';
+                box.querySelector('.pp-title').innerText = '#' + song.code + ' · ' + song.title;
+                box.querySelector('.pp-sub').innerText = song.artist;
+                return;
+            }
+
+            box.className = 'pad-preview hint-state';
+            box.innerText = songbookLoading
+                ? 'Songbook is still loading…'
+                : '#' + code + ' is not in the songbook — it will still be sent.';
+        }
+
+        // ---------------------------------------------------------------
+        // Number pad
+        // ---------------------------------------------------------------
+        function initPadAudio() {
+            if (padAudioPool) return;
+            padAudioPool = {};
+            Object.keys(CONFIG.NUMBER_SOUND_EFFECTS).forEach(digit => {
+                const audio = new Audio(CONFIG.NUMBER_SOUND_EFFECTS[digit]);
+                audio.preload = 'auto';
+                audio.volume = 0.3;
+                padAudioPool[digit] = audio;
+            });
+        }
+
+        function playDigitSound(digit) {
+            if (!padSoundOn) return;
+            initPadAudio();
+            const audio = padAudioPool[digit];
+            if (!audio) return;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        }
+
+        function togglePadSound() {
+            padSoundOn = !padSoundOn;
+            writePref('rk_remote_pad_sound', padSoundOn);
+            vibrate(HAPTICS.toggle);
+
+            const btn = el('padSoundBtn');
+            btn.innerText = padSoundOn ? '🔊 Sound' : '🔇 Muted';
+            btn.classList.toggle('off', !padSoundOn);
+            btn.setAttribute('aria-pressed', String(padSoundOn));
+            if (padSoundOn) playDigitSound('0');
+        }
+
+        function releasePadFocus() {
+            // Tapping a pad key moves focus off the field, which would break
+            // Enter-to-play. Put it back.
+            const active = document.activeElement;
+            if (active && active.classList && active.classList.contains('pad-key')) active.blur();
+        }
+
+        function pressPadKey(digit) {
+            const input = el('quickSearchInput');
+            const next = sanitizeNumberInput(input.value + digit);
+            if (next === input.value) return;      // hit the length cap
+            input.value = next;
+            playDigitSound(digit);
+            vibrate(HAPTICS.pad);
+            releasePadFocus();
+            updatePadPreview();
+        }
+
+        function padBackspace() {
+            const input = el('quickSearchInput');
+            input.value = input.value.slice(0, -1);
+            vibrate(HAPTICS.pad);
+            releasePadFocus();
+            updatePadPreview();
+        }
+
+        function padClear() {
+            el('quickSearchInput').value = '';
+            vibrate(HAPTICS.pad);
+            releasePadFocus();
+            updatePadPreview();
+        }
+
+        function startPadHold(btn) {
+            cancelPadHold();
+            if (btn) btn.classList.add('holding');
+            holdTimer = setTimeout(() => {
+                holdTimer = null;
+                padClear();
+                if (btn) btn.classList.remove('holding');
+            }, 600);
+        }
+
+        function cancelPadHold(btn) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+            if (btn) btn.classList.remove('holding');
+        }
+
         function extractVideoId(query) {
             try {
                 const url = new URL(query);
@@ -1044,20 +1658,47 @@
             return null;
         }
 
-        async function quickText(playNow) {
-            const input = document.getElementById('quickSearchInput');
+        function quickText(playNow) {
+            if (quickMode === 'number') return quickNumber(playNow);
+            return quickTextSearch(playNow);
+        }
+
+        // Number mode: the player resolves song_code through
+        // playSongByNumber(), so the remote never has to resolve it itself.
+        // The local lookup only feeds the preview.
+        async function quickNumber(playNow) {
+            const input = el('quickSearchInput');
+            const code = sanitizeNumberInput(input.value);
+            if (!code) {
+                showToast('Enter a song number', 'error', 'Tap the keypad below.');
+                return;
+            }
+
+            const song = resolveSongByCode(code);
+            const btn = playNow ? el('quickPlayBtn') : el('quickReserveBtn');
+            await sendCommand({
+                action: playNow ? 'play' : 'reserve',
+                songCode: code,
+                videoTitle: song ? (song.title + ' - ' + song.artist) : ('Songbook #' + code)
+            }, btn);
+
+            input.value = '';
+            updatePadPreview();
+        }
+
+        async function quickTextSearch(playNow) {
+            const input = el('quickSearchInput');
             const query = input.value.trim();
             if (!query) return;
 
-            const btn = playNow ? document.getElementById('quickPlayBtn') : document.getElementById('quickReserveBtn');
-            const original = btn.innerText;
+            const btn = playNow ? el('quickPlayBtn') : el('quickReserveBtn');
             setQuickLoading(true, btn);
 
             try {
                 const directId = extractVideoId(query);
                 if (directId) {
                     input.value = '';
-                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: directId, videoTitle: 'Direct link: ' + directId });
+                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: directId, videoTitle: 'Direct link: ' + directId }, btn);
                     return;
                 }
 
@@ -1073,7 +1714,7 @@
 
                 if (result) {
                     input.value = '';
-                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: result.id, videoTitle: result.title });
+                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: result.id, videoTitle: result.title }, btn);
                 } else {
                     showToast('Song not found', 'error', 'Try a different title or artist.');
                 }
@@ -1081,12 +1722,13 @@
                 console.error('Quick text search error:', err);
                 showToast('Search failed', 'error', 'Check your connection and try again.');
             } finally {
-                setQuickLoading(false, btn, original);
+                setQuickLoading(false, btn);
             }
         }
 
-        function setQuickLoading(isLoading, btn, original) {
-            btn.innerText = isLoading ? 'Searching...' : original;
+        function setQuickLoading(isLoading, btn) {
+            if (!btn) return;
+            btn.classList.toggle('loading', isLoading);
             btn.disabled = isLoading;
         }
 
@@ -1113,20 +1755,26 @@
                 action: playNow ? 'play' : 'reserve',
                 songCode: song.code,
                 videoTitle: song.title + ' - ' + song.artist
-            });
+            }, playNow ? el('modalPlayBtn') : el('modalReserveBtn'));
         }
 
         // ---------------------------------------------------------------
         // Command delivery (Supabase remote_commands)
         // ---------------------------------------------------------------
-        async function sendCommand(cmd) {
+        async function sendCommand(cmd, btn) {
             if (!playerId) {
                 showToast('Not paired with a player', 'error');
                 return;
             }
+            // Guards the songbook/modal paths too, not just the dimmed buttons:
+            // a second command would stack a second 20s poll on top of the first.
+            if (commandInFlight) {
+                showToast('Still waiting for the player…', '', 'One command at a time.');
+                return;
+            }
             requestWakeLock();
 
-            const shortId = 'P-' + playerId.slice(-6).toUpperCase();
+            const shortId = shortPlayerId();
             const { data, error } = await supabaseClient.from('remote_commands').insert({
                 player_id: playerId,
                 action: cmd.action,
@@ -1138,22 +1786,30 @@
 
             if (error || !data) {
                 console.error('Command insert error:', error);
+                flashButtonState(btn, 'fail-state', 'Failed');
                 showToast('Could not reach the player', 'error', 'Make sure the remote-control tables exist in Supabase.');
                 return;
             }
 
             const rowId = data.id;
             showToast(cmd.action === 'play' ? '▶ Sending Play Now...' : '📥 Reserving...', '', 'Waiting for the player...');
-            vibrate(10);
+            vibrate(HAPTICS.send);
+            setCommandBusy(true);
 
             // Poll the command row until the player flips it to ack/failed.
             // Plain REST polling — works on the free Supabase tier (Realtime is paid).
-            const pollInterval = 2000;
-            const maxAttempts = 10; // ~20s before declaring the player unreachable
+            const pollInterval = CONFIG.COMMAND_POLL_INTERVAL;
+            const maxAttempts = CONFIG.COMMAND_MAX_ATTEMPTS;
             let attempts = 0;
+
+            const finish = (state, label) => {
+                setCommandBusy(false);
+                flashButtonState(btn, state, label);
+            };
 
             const poll = async () => {
                 if (attempts >= maxAttempts) {
+                    finish('fail-state', 'No reply');
                     showToast('Command sent — player offline?', 'error', 'No confirmation from ' + shortId);
                     return;
                 }
@@ -1163,13 +1819,15 @@
                         .select('status').eq('id', rowId).single();
                     const status = res.data && res.data.status;
                     if (status === 'ack') {
+                        finish('success-state', cmd.action === 'play' ? 'Done ✓' : 'Reserved ✓');
                         showToast(cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved', 'success', shortId);
-                        vibrate(15);
+                        vibrate(HAPTICS.ack);
                         return;
                     }
                     if (status === 'failed') {
+                        finish('fail-state', 'Failed');
                         showToast('Player could not play that song', 'error', shortId);
-                        vibrate([30, 40, 30]);
+                        vibrate(HAPTICS.fail);
                         return;
                     }
                 } catch (err) {
@@ -1181,11 +1839,50 @@
             setTimeout(poll, pollInterval);
         }
 
+        // Confirmation lands on the button the guest actually pressed, not only
+        // in a toast two seconds later.
+        function captureIdleLabels() {
+            ['quickPlayBtn', 'quickReserveBtn', 'modalPlayBtn', 'modalReserveBtn'].forEach(id => {
+                const btn = el(id);
+                const label = btn && btn.querySelector('.btn-label');
+                if (btn && label) btn.dataset.idleLabel = label.innerText;
+            });
+        }
+
+        function flashButtonState(btn, stateClass, label) {
+            if (!btn) return;
+            const labelNode = btn.querySelector('.btn-label');
+            if (!labelNode) return;
+
+            // A second send can land before the first restore fires; clear the
+            // old timer so labels cannot be restored out of order.
+            clearTimeout(restoreTimers[btn.id]);
+            btn.classList.remove('success-state', 'fail-state');
+            if (stateClass) btn.classList.add(stateClass);
+            labelNode.innerText = label;
+
+            restoreTimers[btn.id] = setTimeout(() => {
+                btn.classList.remove('success-state', 'fail-state');
+                // Always restore from the captured idle label, never from the
+                // live text, which may currently hold a temporary one.
+                labelNode.innerText = btn.dataset.idleLabel || labelNode.innerText;
+            }, 2000);
+        }
+
+        function setCommandBusy(on) {
+            commandInFlight = on;
+            const actions = el('quickActions');
+            if (actions) actions.classList.toggle('busy', on);
+        }
+
         // ---------------------------------------------------------------
         // Toast, vibration, wake lock
         // ---------------------------------------------------------------
         function showToast(message, type = '', sub = '') {
-            const container = document.getElementById('toastContainer');
+            const container = el('toastContainer');
+            // Three at a time: more than that buries the screen on a phone.
+            while (container.children.length >= 3) container.removeChild(container.firstChild);
+
             const toast = document.createElement('div');
             toast.className = 'toast ' + (type || '');
             toast.innerText = message;
@@ -1196,7 +1893,13 @@
                 toast.appendChild(span);
             }
             container.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
+            setTimeout(() => dismissToast(toast), 4000);
+        }
+
+        function dismissToast(toast) {
+            if (!toast || toast.classList.contains('dismissing')) return;
+            toast.classList.add('dismissing');
+            setTimeout(() => toast.remove(), 280);
         }
 
         function vibrate(pattern) {
@@ -1217,10 +1920,24 @@
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !document.getElementById('remoteApp').classList.contains('hidden')) {
-                const active = document.activeElement;
-                if (active && active.id === 'quickSearchInput') quickText(true);
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+            const active = document.activeElement;
+
+            // Enter plays, Shift+Enter reserves (mirrors app.js).
+            if (e.key === 'Enter' && !el('remoteApp').classList.contains('hidden')) {
+                if (active && active.id === 'quickSearchInput') {
+                    quickText(!e.shiftKey);
+                    return;
+                }
             }
+
+            // Digit feedback when typing a number on a physical keyboard.
+            if (quickMode === 'number' && /^[0-9]$/.test(e.key) && !e.repeat &&
+                active && active.id === 'quickSearchInput') {
+                playDigitSound(e.key);
+            }
+
             if (e.key === 'Escape') {
                 closeSongModal();
                 closeScanner();
@@ -1237,6 +1954,17 @@
         if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
             navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW registration failed:', e));
         }
+
+        captureIdleLabels();
+        el('songList').addEventListener('click', onSongListClick);
+        el('quickSearchInput').addEventListener('input', onQuickInput);
+        setSongbookOpen(songbookOpen);
+        syncQuickModeUI();
+
+        const padSoundBtn = el('padSoundBtn');
+        padSoundBtn.innerText = padSoundOn ? '🔊 Sound' : '🔇 Muted';
+        padSoundBtn.classList.toggle('off', !padSoundOn);
+        padSoundBtn.setAttribute('aria-pressed', String(padSoundOn));
 
         const pairedId = getPlayerIdParam();
         if (pairedId) {

@@ -1,17 +1,33 @@
-const CACHE_NAME = 'rk-remote-v1';
+const CACHE_NAME = 'rk-remote-v2';
 const CORE_ASSETS = [
     'remote.html',
     'manifest.json',
     'images/favicon-32x32.png',
     'images/favicon-16x16.png',
     'images/apple-touch-icon.png',
-    'images/icon.png'
+    'images/icon.png',
+    // Number-pad digit feedback. Without these the keypad is silent offline.
+    'soundEffects/zero.mp3',
+    'soundEffects/one.mp3',
+    'soundEffects/two.mp3',
+    'soundEffects/three.mp3',
+    'soundEffects/four.mp3',
+    'soundEffects/five.mp3',
+    'soundEffects/six.mp3',
+    'soundEffects/seven.mp3',
+    'soundEffects/eight.mp3',
+    'soundEffects/nine.mp3'
 ];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then((cache) => cache.addAll(CORE_ASSETS))
+            // addAll is atomic: one 404 would reject the whole install and the
+            // remote would lose its offline shell. Assets are added
+            // individually so a single missing file cannot break the install.
+            .then((cache) => Promise.all(CORE_ASSETS.map((asset) =>
+                cache.add(asset).catch((err) => console.warn('SW: could not cache', asset, err))
+            )))
             .then(() => self.skipWaiting())
     );
 });
