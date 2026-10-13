@@ -30,7 +30,7 @@ Pitch is detected by autocorrelation over the vocal range only (60–1200Hz), wi
 - **📋 Smart Queue System:** Add and manage songs with a beautiful "Up Next" card interface. The queue seamlessly auto-plays the next song the moment your score sound finishes.
 - **🔍 Robust Search:** Integrated YouTube search through the backend proxy, with a Supabase-backed cache in front of it and a relevance filter that rejects off-target results.
 - **📱 Phone Remote:** Pair via QR code or the printed Player ID to queue songs from a phone (`remote.html`) or the Android app.
-- **📈 SEO & Accessibility Optimized:** Fully compliant with Google Search Console standards. Features dynamically loaded JSON-LD schema (`seo.jsonld`), hidden screen-reader friendly elements (`aria-label`), clean canonical tags, and a highly performant separated asset structure.
+- **📈 SEO & Accessibility Optimized:** Valid `title`/description/canonical/robots meta, inline `WebSite` + `WebApplication` JSON-LD, Open Graph and Twitter cards, a `sitemap.xml` declared in `robots.txt`, a custom `404.html`, and visible on-page copy (no hidden keyword text). `remote.html`, `songbook.html` and `manage.html` are `noindex` app surfaces and stay out of the sitemap.
 - **⌨️ Power-User Shortcuts:** 
   - `Z` - Play/Pause
   - `C` - Restart
@@ -50,8 +50,8 @@ YouTube search runs through the backend proxy at `https://karaoke-backend-topaz.
 ### Installation
 The project is built entirely with frontend technologies.
 1. Download or clone this repository.
-2. Ensure you have all the core files (`index.html`, `style.css`, `app.js`, `seo.jsonld`, `scoreSound.mp3`).
-3. Run the project using a local development server (e.g., VS Code Live Server or Python HTTP Server) so that the `seo.jsonld` file can be dynamically fetched without browser security restrictions.
+2. Ensure you have all the core files (`index.html`, `style.css`, `app.js`, `scoreSound.mp3`).
+3. Run the project using a local development server (e.g., VS Code Live Server or Python HTTP Server).
 4. Open the local address in any modern web browser and start singing!
 
 ## 🛠️ Tech Stack

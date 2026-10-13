@@ -13,7 +13,6 @@
     <link rel="canonical" href="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/">
     
     <!-- Primary SEO Metadata -->
-    <meta name="title" content="Randel Karaoke Player">
     <meta name="description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
     <meta name="author" content="Randel Chris Castro">
     <meta name="robots" content="index, follow">
@@ -24,13 +23,18 @@
     <meta property="og:url" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/">
     <meta property="og:title" content="Randel Karaoke Player">
     <meta property="og:description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
-    <meta property="og:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon.png">
+    <meta property="og:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="675">
+    <meta property="og:image:alt" content="Randel Karaoke Player - Next Gen Karaoke Experience">
+    <meta property="og:locale" content="en_US">
 
     <!-- Twitter / X Meta Tags -->
-    <meta name="twitter:card" content="summary">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Randel Karaoke Player">
     <meta name="twitter:description" content="Randel Karaoke Player - A beautiful, interactive, and responsive web-based karaoke player using YouTube. Enjoy singing your favorite songs with real-time scoring.">
-    <meta name="twitter:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon.png">
+    <meta name="twitter:image" content="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon-image.png">
+    <meta name="twitter:image:alt" content="Randel Karaoke Player - Next Gen Karaoke Experience">
 
     <!-- Assets & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,38 +42,77 @@
     <!-- ?v= cache-buster: bump this number whenever style.css changes, otherwise a
          browser (or GitHub Pages) keeps serving the old stylesheet and silently
          ignores layout fixes. Keep it in step with the ?v on app.js below. -->
-    <link rel="stylesheet" href="style.css?v=6">
-    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="manifest" href="manifest-player.json">
     <meta name="theme-color" content="#030303">
     <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <!-- Structured Data -->
+    <!-- Structured Data.
+         Inline on purpose: JSON-LD must be in the HTML. The old external
+         seo.jsonld was never fetched by any page and GitHub Pages served it
+         as text/plain anyway, so Google could never parse it. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Randel Karaoke Player",
-      "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/?q={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/#website",
+          "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
+          "name": "Randel Karaoke Player",
+          "inLanguage": "en"
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/#app",
+          "name": "Randel Karaoke Player",
+          "alternateName": "Randel Karaoke",
+          "url": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/",
+          "description": "An interactive, online karaoke player built on top of the YouTube API featuring real-time pitch scoring, premium glassmorphism visuals, and an automated audio visualizer.",
+          "applicationCategory": "MultimediaApplication",
+          "applicationSubCategory": "Karaoke Player",
+          "operatingSystem": "All",
+          "browserRequirements": "Requires HTML5 compatible browser with JavaScript enabled.",
+          "inLanguage": "en",
+          "image": "https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/images/icon-image.png",
+          "featureList": [
+            "YouTube integration",
+            "Real-time audio visualizer",
+            "Live pitch scoring system",
+            "Apple-inspired UI",
+            "Keyboard shortcuts control"
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Randel Chris Castro",
+            "url": "https://github.com/sirR4ND3L"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": "0.00",
+            "priceCurrency": "USD"
+          }
+        }
+      ]
     }
     </script>
 </head>
 
 <body>
 
-    <div style="display: none;">
+    <noscript>
+        <!-- Legit fallback for crawlers that do not run JS. Not hidden text:
+             noscript content is only rendered when scripting is off, which is
+             exactly the case this describes. -->
         <h1>Randel Karaoke Player</h1>
         <p>
-            Randel Karaoke Player is a next-generation, interactive, and responsive web-based karaoke system 
-            powered by YouTube. It offers real-time scoring, song queuing, and an easy-to-use search interface 
-            designed for a seamless home or event karaoke experience. 
+            A next-generation, interactive, and responsive web-based karaoke system powered by
+            YouTube. It offers real-time scoring, song queuing, and an easy-to-use search interface
+            designed for a seamless home or event karaoke experience. Please enable JavaScript to use
+            the player.
         </p>
-    </div>
+    </noscript>
 
     <div class="bg-blobs">
         <div class="blob"></div>
@@ -142,6 +185,10 @@
                         <div class="mic-icon" aria-hidden="true">🎙️</div>
                         <h1 class="visible-title">Randel Karaoke Player</h1>
                         <p style="color: var(--text-secondary)">Next Gen Karaoke Experience</p>
+                        <p class="welcome-blurb">
+                            A next-generation, responsive web-based karaoke system powered by YouTube,
+                            with real-time scoring, song queuing, and a phone remote for guests.
+                        </p>
                     </div>
                 </div>
 
@@ -184,6 +231,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=6" defer></script>
+    <script src="app.js?v=7" defer></script>
 </body>
 </html>

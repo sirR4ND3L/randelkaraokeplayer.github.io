@@ -395,6 +395,18 @@ iframe {
     z-index: 4;
     position: relative;
     text-align: center;
+    max-width: 34rem;
+}
+
+/* Descriptive copy under the welcome title. Real, visible page text (it used to
+   be a display:none keyword block); kept small so the stage still reads as a
+   player rather than a document. */
+.welcome-blurb {
+    margin: 14px auto 0;
+    max-width: 30rem;
+    font-size: clamp(0.85rem, 1.6vw, 1rem);
+    line-height: 1.55;
+    color: var(--text-secondary);
 }
 
 .welcome-content h1 {

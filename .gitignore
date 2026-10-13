@@ -1,0 +1,11 @@
+# Agent / tooling workspace - must never be published by GitHub Pages.
+.opencode/
+
+# Internal design notes and specs. These are working documents, not site
+# content, and were previously being copied into the public build.
+md/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp

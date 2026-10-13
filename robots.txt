@@ -2,5 +2,9 @@
 User-agent: *
 Allow: /
 
+# Runtime fragment fetched by app.js/admin.js and injected into the DOM.
+# It is not a real page, so keep it out of the index.
+Disallow: /customAlert.html
+
 # Sitemap Declaration
 Sitemap: https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/sitemap.xml
