@@ -103,7 +103,11 @@ SCORING: {
         bgvReady: false,
         playGateTimer: null,
         queueFlashTimer: null,
-        volume: 100
+        volume: 100,
+        nowPlayingTitle: null,
+        heartbeatBusy: false,
+        heartbeatDebounce: null,
+        heartbeatHasNowPlaying: null
     },
 
     // --- 3. Cached DOM Elements ---
@@ -213,6 +217,8 @@ SCORING: {
         // Every state transition can move the player in or out of "a karaoke
         // video is loaded", which is what decides the idle background loop.
         this.syncBackgroundVideo();
+        // ...and in or out of "the stage is busy" for the phone remote.
+        this.requestHeartbeat();
         if (event.data === YT.PlayerState.ENDED) {
             this.handleSongEnded();
         }
@@ -434,6 +440,7 @@ SCORING: {
     // Updates the Dynamic Island and status text.
     updateNowPlayingUI(title) {
         const { nowPlaying, playerPlaceholder, dynamicIsland } = this.elements;
+        this.state.nowPlayingTitle = title || null;
         if (title) {
             nowPlaying.innerText = "🎵 " + title;
             playerPlaceholder.classList.add('hidden');
@@ -445,6 +452,9 @@ SCORING: {
             dynamicIsland.classList.remove('active');
             document.title = this.CONFIG.APP_TITLE;
         }
+        // Presence includes what is playing, so remotes can confirm with the
+        // truth instead of a guess.
+        this.requestHeartbeat();
     },
 
     // Toggles play/pause state of the YouTube player.
@@ -1171,24 +1181,8 @@ SCORING: {
         const client = this.state.supabaseClient;
         const playerId = this.getPlayerId();
 
-        const heartbeat = async () => {
-            try {
-                await client.from('online_players').upsert({
-                    player_id: playerId,
-                    short_id: this.getPlayerShortId(),
-                    last_seen: new Date().toISOString()
-                }, { onConflict: 'player_id' });
-            } catch (err) {
-                // Fail silently: the remote-control tables may not exist yet
-                if (this.state.remoteWarned !== true) {
-                    this.state.remoteWarned = true;
-                    console.warn("Heartbeat failed:", err.message);
-                }
-            }
-        };
-
-        heartbeat();
-        this.state.heartbeatInterval = setInterval(heartbeat, 10000);
+        this.sendHeartbeat();
+        this.state.heartbeatInterval = setInterval(() => this.sendHeartbeat(), 10000);
 
         window.addEventListener('beforeunload', () => {
             clearInterval(this.state.heartbeatInterval);
@@ -1196,6 +1190,69 @@ SCORING: {
             client.from('online_players').delete().eq('player_id', playerId)
                 .then(() => {}, () => {});
         });
+    },
+
+    // Writes the presence row, including what the stage is doing. `now_playing`
+    // is what lets remote.html promise "Playing now" only when that is true:
+    // while a song is on, a play command is queued behind it instead of
+    // interrupting, so the remote says "Accepted" for those commands.
+    //
+    // The column is optional. Projects that have not added it answer the upsert
+    // with an error naming the column; that is detected once and the heartbeat
+    // falls back to the original row shape so discovery keeps working either way.
+    async sendHeartbeat() {
+        const client = this.state.supabaseClient;
+        if (!client || this.state.heartbeatBusy) return;
+        this.state.heartbeatBusy = true;
+
+        const base = {
+            player_id: this.getPlayerId(),
+            short_id: this.getPlayerShortId(),
+            last_seen: new Date().toISOString()
+        };
+        const row = this.state.heartbeatHasNowPlaying === false
+            ? base
+            : { ...base, now_playing: this.getBusySongTitle() };
+
+        try {
+            const { error } = await client.from('online_players').upsert(row, { onConflict: 'player_id' });
+            if (error) throw error;
+            if (this.state.heartbeatHasNowPlaying !== false) this.state.heartbeatHasNowPlaying = true;
+        } catch (err) {
+            const message = String((err && err.message) || '');
+            if (this.state.heartbeatHasNowPlaying !== false && message.includes('now_playing')) {
+                // Optional column not present yet: retry without it and stop
+                // asking (per session), instead of losing the heartbeat entirely.
+                this.state.heartbeatHasNowPlaying = false;
+                client.from('online_players').upsert(base, { onConflict: 'player_id' })
+                    .then(() => {}, () => {});
+            } else if (this.state.remoteWarned !== true) {
+                // Fail silently: the remote-control tables may not exist yet
+                this.state.remoteWarned = true;
+                console.warn("Heartbeat failed:", message);
+            }
+        } finally {
+            this.state.heartbeatBusy = false;
+        }
+    },
+
+    // The song on stage while it is busy, else null. Mirrors the
+    // PLAYING/BUFFERING test handleFoundVideo() uses to queue instead of play,
+    // so the remote's confirmation matches what the player will actually do.
+    getBusySongTitle() {
+        if (this.state.idle || !this.state.player) return null;
+        if (typeof YT === 'undefined' || typeof this.state.player.getPlayerState !== 'function') return null;
+        const state = this.state.player.getPlayerState();
+        const busy = state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING;
+        return busy ? (this.state.nowPlayingTitle || 'A song') : null;
+    },
+
+    // Nudges a heartbeat right after a playback transition, so the remote's
+    // idea of "stage busy" is fresh; the 10s interval alone can lag behind.
+    requestHeartbeat() {
+        if (!this.state.supabaseClient) return;
+        clearTimeout(this.state.heartbeatDebounce);
+        this.state.heartbeatDebounce = setTimeout(() => this.sendHeartbeat(), 400);
     },
 
     // Reacts to remote commands (play / reserve) by POLLING the pending rows

@@ -1050,6 +1050,8 @@
         let skeletonTimer = null;
         let holdTimer = null;
         let lastSeenAt = 0;
+        let playerNowPlaying = null;    // title of the song on stage, or null when free
+        let hasNowPlayingColumn = null; // null = not probed yet, true/false once known
 
         // ---------------------------------------------------------------
         // Small helpers
@@ -1282,8 +1284,32 @@
 
             const check = async () => {
                 try {
-                    const { data } = await supabaseClient.from('online_players')
-                        .select('last_seen').eq('player_id', pid).maybeSingle();
+                    let data = null;
+
+                    // Prefer the optional now_playing column so command feedback
+                    // can tell "starts now" from "queued behind the current song".
+                    // Projects without it answer with an error naming the column;
+                    // fall back to last_seen only, exactly as before.
+                    if (hasNowPlayingColumn !== false) {
+                        const res = await supabaseClient.from('online_players')
+                            .select('last_seen, now_playing').eq('player_id', pid).maybeSingle();
+                        if (!res.error) {
+                            hasNowPlayingColumn = true;
+                            data = res.data;
+                        } else if (String(res.error.message || '').includes('now_playing')) {
+                            hasNowPlayingColumn = false;
+                        } else {
+                            throw res.error;
+                        }
+                    }
+                    if (hasNowPlayingColumn === false) {
+                        const res = await supabaseClient.from('online_players')
+                            .select('last_seen').eq('player_id', pid).maybeSingle();
+                        data = res.data;
+                    }
+
+                    playerNowPlaying = data && data.now_playing ? String(data.now_playing) : null;
+
                     if (data && data.last_seen) {
                         lastSeenAt = new Date(data.last_seen).getTime();
                         setStatus((Date.now() - lastSeenAt) < 30000 ? 'online' : 'offline');
@@ -1871,6 +1897,30 @@
 
         // Command delivery (Supabase remote_commands)
         // ---------------------------------------------------------------
+
+        // What a play command's confirmation should claim. The player queues
+        // instead of interrupting when a song is already on, so "Playing now"
+        // is only promised when the last heartbeat says the stage is free. If
+        // the optional now_playing column is missing, the remote cannot tell
+        // and stays neutral ("Accepted").
+        function playNowOutcome() {
+            if (hasNowPlayingColumn === false) {
+                return {
+                    label: 'Accepted ✓',
+                    message: '✓ Accepted',
+                    sub: 'Plays now if the stage is free, otherwise joins the queue.'
+                };
+            }
+            if (playerNowPlaying) {
+                return {
+                    label: 'Accepted ✓',
+                    message: '✓ Accepted — stage is busy',
+                    sub: 'Reserved instead of interrupting the current song.'
+                };
+            }
+            return { label: 'Done ✓', message: '▶ Playing now', sub: shortPlayerId() };
+        }
+
         async function sendCommand(cmd, btn) {
             if (!playerId) {
                 showToast('Not paired with a player', 'error');
@@ -1903,10 +1953,12 @@
             }
 
             const rowId = data.id;
+            const busyNow = hasNowPlayingColumn === true && !!playerNowPlaying;
             showToast(
-                cmd.action === 'play' ? '▶ Sending Play Now...'
-                : cmd.action === 'volume' ? '🎧 Setting volume...'
-                : '📥 Reserving...', '', 'Waiting for the player...');
+                cmd.action === 'volume' ? '🎧 Setting volume...'
+                : cmd.action === 'play'
+                    ? (busyNow ? '📥 Reserving — a song is playing...' : '▶ Sending Play Now...')
+                    : '📥 Reserving...', '', 'Waiting for the player...');
             vibrate(HAPTICS.send);
             setCommandBusy(true);
 
@@ -1936,8 +1988,14 @@
                     // so it must not report "Reserved" on either outcome.
                     const isVolume = cmd.action === 'volume';
                     if (status === 'ack') {
-                        finish('success-state', isVolume ? 'Set ✓' : (cmd.action === 'play' ? 'Done ✓' : 'Reserved ✓'));
-                        showToast(isVolume ? '🎧 Volume set' : (cmd.action === 'play' ? '▶ Playing now' : '✓ Reserved'), 'success', shortId);
+                        if (cmd.action === 'play') {
+                            const outcome = playNowOutcome();
+                            finish('success-state', outcome.label);
+                            showToast(outcome.message, 'success', outcome.sub);
+                        } else {
+                            finish('success-state', isVolume ? 'Set ✓' : 'Reserved ✓');
+                            showToast(isVolume ? '🎧 Volume set' : '✓ Reserved', 'success', shortId);
+                        }
                         vibrate(HAPTICS.ack);
                         return;
                     }

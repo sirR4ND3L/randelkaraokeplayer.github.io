@@ -88,6 +88,20 @@ Supabase, not in this repo:
 3. Add a login step to `manage.html`, or move the console to a private
    deployment.
 
+### Optional: now-playing status for the remote
+
+Add this column once in the Supabase SQL editor and the phone remote can tell
+whether "Play Now" starts immediately or is queued behind the current song:
+
+```sql
+alter table public.online_players add column if not exists now_playing text;
+```
+
+The player includes the current song in its heartbeat and the remote reads it
+next to `last_seen`. Until the column exists the remote shows a neutral
+"Accepted" confirmation for play commands instead, and everything else —
+presence, discovery, commands — works exactly the same either way.
+
 ### Known limitation: duplicated tabs
 The Player ID is persisted in `window.name`, so duplicating a player tab produces a second tab with the **same** Player ID. Both tabs will then poll and act on the same remote commands. Open a single player tab per Player ID. (`window.name` is also origin-scoped and reset on cross-origin navigation; `sessionStorage` would be a cleaner store if a behavior change is ever wanted.)
 
