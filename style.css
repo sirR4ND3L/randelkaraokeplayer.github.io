@@ -1383,9 +1383,85 @@ body.admin-page .add-song-hint {
     color: #94a3b8;
 }
 
+/* Live preview of the pasted YouTube link */
+body.admin-page .add-song-preview {
+    margin-top: 14px;
+    padding: 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+}
+
+body.admin-page .add-song-preview[hidden] { display: none; }
+
+/* Video title pulled from YouTube, shown above the embed */
+body.admin-page .add-song-preview-title {
+    margin: 2px 4px 10px;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    color: #e2e8f0;
+    overflow-wrap: anywhere;
+}
+
+body.admin-page .add-song-preview-title.is-loading {
+    font-weight: 400;
+    font-style: italic;
+    color: #94a3b8;
+}
+
+body.admin-page .add-song-preview-title.is-unavailable {
+    font-weight: 400;
+    font-size: 13px;
+    font-style: italic;
+    color: #f59e0b;
+}
+
+body.admin-page .add-song-preview-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+}
+
+body.admin-page .add-song-preview-frame iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+body.admin-page .add-song-preview-meta {
+    margin: 10px 0 0;
+    font-size: 13px;
+    text-align: center;
+    color: #94a3b8;
+}
+
+body.admin-page .add-song-preview-meta span { color: #67fc53; font-weight: 700; }
+
+body.admin-page .add-song-preview-channel {
+    display: block;
+    margin-bottom: 4px;
+    color: #94a3b8;
+    font-weight: 400;
+}
+
+body.admin-page .add-song-preview-meta a { color: #9fd1fa; }
+
+body.admin-page .add-song-preview-error {
+    margin: 0;
+    padding: 6px 0;
+    font-size: 13px;
+    text-align: center;
+    color: #f59e0b;
+}
+
 /* Action Buttons */
-body.admin-page .action-buttons { display: flex; justify-content: center; gap: 15px; }
-body.admin-page .saveAllSong { background: #22c55e !important; color: white !important; }
 body.admin-page .reEditSong { background: #475569 !important; color: white !important; }
 body.admin-page .deleteSong { background: #dc3545 !important; color: white !important; }
 
@@ -1424,15 +1500,12 @@ body.admin-page .modal-content {
     body.admin-page .admin-search { flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     body.admin-page .admin-search input { flex: 1 1 100%; }
     body.admin-page .admin-search button { width: 100% !important; padding: 12px !important; }
-    body.admin-page .action-buttons { flex-wrap: wrap; gap: 10px; }
     body.admin-page .song-card { padding: 18px; min-height: 0; border-radius: 20px; }
     body.admin-page #songContainer { grid-template-columns: 1fr; gap: 16px; padding: 8px 0 12px; }
     body.admin-page .add-song-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {
-    body.admin-page .action-buttons { flex-direction: column; }
-    body.admin-page .action-buttons button { width: 100% !important; margin: 4px 0 !important; }
     body.admin-page .modal-content { padding: 22px; width: 92%; }
 }
 

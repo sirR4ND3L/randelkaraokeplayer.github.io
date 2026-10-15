@@ -108,20 +108,31 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
     "'": '&#39;'
 }[char]));
 
+// Every branch below funnels through this: the id ends up in innerHTML (the
+// video preview) and in the database, so a URL like watch?v="><script>... must
+// not be able to smuggle arbitrary text through as an "id".
+const isValidVideoId = (id) => /^[\w-]{11}$/.test(String(id || ''));
+
 // Accepts any of the URL shapes a person is likely to paste, plus a raw ID.
 function extractYouTubeId(input) {
     const value = String(input || '').trim();
     if (!value) return null;
+
+    if (isValidVideoId(value)) return value;
+
     try {
         const url = new URL(value);
-        if (url.hostname.includes('youtube.com')) {
-            return url.searchParams.get('v')
-                || (url.pathname.match(/\/(?:shorts|embed|live|v)\/([\w-]{11})/) || [])[1]
-                || null;
-        }
-        if (url.hostname === 'youtu.be') return url.pathname.slice(1) || null;
+        const candidate = url.hostname.includes('youtube.com')
+            ? url.searchParams.get('v')
+                || (url.pathname.match(/\/(?:shorts|embed|live|v)\/([\w-]+)/) || [])[1]
+                || null
+            : url.hostname === 'youtu.be'
+                ? url.pathname.slice(1)
+                : null;
+        return isValidVideoId(candidate) ? candidate : null;
     } catch {}
-    return /^[\w-]{11}$/.test(value) ? value : null;
+
+    return null;
 }
 
 // Mirrors the cache key the player builds from its search box (app.js), so a
@@ -133,10 +144,116 @@ function buildSearchQuery(title) {
 }
 
 let addSongSubmitting = false;
+let previewTimer = null;
+// Bumped on every render so a slow oEmbed reply for an old link can't overwrite
+// the preview of the one the admin has since pasted.
+let previewRequestId = 0;
 
 function setAddSongHint(message) {
     const hint = document.getElementById('addSongHint');
     if (hint) hint.textContent = message || '';
+}
+
+// YouTube's oEmbed endpoint needs no API key (this repo deliberately has none in
+// the browser - the search key lives in the Vercel backend) and answers CORS, so
+// it is the cheapest way to read back the real title of a pasted video.
+async function fetchVideoTitle(videoId) {
+    try {
+        const url = `https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(response.status === 404 ? 'not found' : `HTTP ${response.status}`);
+        return await response.json();
+    } catch (err) {
+        console.warn('oEmbed lookup failed:', err.message);
+        return null;
+    }
+}
+
+// Shows the pasted video straight away, so the admin can confirm it really is
+// the karaoke version before committing the row to the songbook. Debounced
+// because "input" fires on every keystroke of a long URL.
+function updateAddSongPreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+        const preview = document.getElementById('newSongPreview');
+        const input = document.getElementById('newSongVideo');
+        if (!preview || !input) return;
+
+        const typed = input.value.trim();
+        if (!typed) {
+            preview.hidden = true;
+            preview.innerHTML = '';
+            return;
+        }
+
+        const videoId = extractYouTubeId(typed);
+        if (!videoId) {
+            preview.hidden = false;
+            preview.innerHTML = '<p class="add-song-preview-error">Not a valid YouTube link yet...</p>';
+            return;
+        }
+
+        const requestId = ++previewRequestId;
+
+        // youtube-nocookie keeps the admin preview from being tracked. The id is
+        // safe to interpolate: extractYouTubeId only returns an 11-character
+        // [A-Za-z0-9_-] match, and everything rendered as text is escaped.
+        preview.hidden = false;
+        preview.innerHTML = `
+            <p class="add-song-preview-title is-loading">Loading title&hellip;</p>
+            <div class="add-song-preview-frame">
+                <iframe src="https://www.youtube-nocookie.com/embed/${videoId}"
+                        title="YouTube preview of ${escapeHtml(videoId)}"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+            <p class="add-song-preview-meta">
+                Previewing <span>${escapeHtml(videoId)}</span> &middot;
+                <a href="https://www.youtube.com/watch?v=${escapeHtml(videoId)}" target="_blank" rel="noopener">Open on YouTube</a>
+            </p>`;
+
+        // The embed is already on screen; only the heading above it is pending.
+        (async () => {
+            const data = await fetchVideoTitle(videoId);
+            if (requestId !== previewRequestId) return;
+
+            const heading = preview.querySelector('.add-song-preview-title');
+            if (!heading) return;
+            heading.classList.remove('is-loading');
+
+            if (data && data.title) {
+                // The title comes from whoever uploaded the video, so it is
+                // untrusted text: render it as text, never as markup.
+                heading.textContent = data.title;
+                if (data.author_name) {
+                    const meta = preview.querySelector('.add-song-preview-meta');
+                    if (meta) {
+                        const channel = document.createElement('span');
+                        channel.className = 'add-song-preview-channel';
+                        channel.textContent = data.author_name;
+                        meta.prepend(channel);
+                    }
+                }
+            } else {
+                // oEmbed 404s for private, deleted or age-restricted videos. The
+                // embed still plays, so this is a hint, not a failure.
+                heading.textContent = 'Title unavailable (video may be private or deleted)';
+                heading.classList.add('is-unavailable');
+            }
+        })();
+    }, 300);
+}
+
+function clearAddSongPreview() {
+    clearTimeout(previewTimer);
+    // Invalidates any in-flight title lookup so it cannot write into a preview
+    // that has since been cleared.
+    previewRequestId++;
+    const preview = document.getElementById('newSongPreview');
+    if (preview) {
+        preview.hidden = true;
+        preview.innerHTML = '';
+    }
 }
 
 // Validation problems are reported in the hint and the modal together, so the
@@ -231,14 +348,6 @@ async function reEditSong(id) {
     else loadSongs();
 }
 
-async function reEditAllSongs() {
-    if (!await showConfirm("Mark all songs as unverified for re-editing?")) return;
-
-    const { error } = await supabaseClient.from(CONFIG.TABLE_NAME).update({ is_verified: false }).eq('is_verified', true);
-    if (error) showAlert("Error: " + error.message);
-    else loadSongs();
-}
-
 async function deleteSong(id) {
     // Confirm by song name, not just the number: the numbers are sparse, so a
     // bare "#97" is easy to misread and delete the wrong card.
@@ -277,7 +386,7 @@ async function deleteSong(id) {
     }
 }
 
-async function saveSong(id, refresh = true) {
+async function saveSong(id) {
     try {
         const artist = document.getElementById(`art-${id}`).value.trim().toUpperCase();
         const title = document.getElementById(`tit-${id}`).value.trim().toUpperCase();
@@ -292,11 +401,9 @@ async function saveSong(id, refresh = true) {
 
         if (error) throw error;
         if (!data || data.length === 0) throw new Error(`Song #${id} was NOT updated. The anon role may be missing UPDATE access to "${CONFIG.TABLE_NAME}".`);
-        
-        if (refresh) {
-            showAlert('Updated!');
-            loadSongs();
-        }
+
+        showAlert('Updated!');
+        loadSongs();
     } catch (err) {
         showAlert(`Save failed: ${err.message}`);
     }
@@ -367,6 +474,7 @@ async function addSongManually() {
         [titleInput, artistInput, videoInput].forEach((input) => { input.value = ''; });
         if (queryInput) queryInput.value = '';
         numberInput.value = '';
+        clearAddSongPreview();
         setAddSongHint(`Added as song #${songNumber} — searchable as "${searchQuery}".`);
         showAlert(`Added "${title} - ${artist}" as song #${songNumber}.`);
         await loadSongs();
@@ -378,24 +486,6 @@ async function addSongManually() {
         addSongSubmitting = false;
         if (btn) { btn.disabled = false; btn.textContent = 'Add to Songbook'; }
     }
-}
-
-async function saveAllUnverified() {
-    const unverifiedDivs = document.querySelectorAll('.song-card[data-unverified="true"]');
-    const promises = [];
-
-    for (const div of unverifiedDivs) {
-        const id = div.getAttribute('data-id');
-        const artist = document.getElementById(`art-${id}`).value.trim();
-        const title = document.getElementById(`tit-${id}`).value.trim();
-
-        if (artist && title) promises.push(saveSong(id, false));
-    }
-
-    if (promises.length === 0) return showAlert("No valid unverified songs to save.");
-    await Promise.all(promises);
-    showAlert('Bulk update complete!');
-    await loadSongs();
 }
 
 // Main initialization entry point
@@ -411,6 +501,15 @@ window.addEventListener('DOMContentLoaded', async () => {
             if (e.key === 'Enter') { e.preventDefault(); addSongManually(); }
         });
     });
+
+    // "input" covers paste as well as typing, so the video preview appears the
+    // moment a link lands in the field.
+    const videoInput = document.getElementById('newSongVideo');
+    if (videoInput) {
+        videoInput.addEventListener('input', updateAddSongPreview);
+        // Opening the panel with a link already in the field previews it too.
+        document.getElementById('addSongPanel')?.addEventListener('toggle', updateAddSongPreview);
+    }
 
     refreshNextSongNumber();
 });
