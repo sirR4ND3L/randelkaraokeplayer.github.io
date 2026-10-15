@@ -3,16 +3,16 @@
  */
 
 // --- Keyboard shortcuts ---
-// Single source of truth: the keydown map and the <kbd> badges rendered on each
-// button are both built from this, so a badge can never advertise a key the
-// handler does not listen for. (Before this existed the legend claimed "B = Cancel"
-// while `b` actually skipped to the next queue item.)
+// Single source of truth for the keydown map, so the handler and the README
+// can never advertise different keys. (The <kbd> badges this table used to
+// render went away with the old control bar.)
 const SHORTCUTS = {
     z: { label: 'Play/Pause', action: () => KaraokeApp.togglePlayPause() },
     c: { label: 'Restart',    action: () => KaraokeApp.restartVideo() },
     b: { label: 'Skip',       action: () => KaraokeApp.playNextInQueue() },
     m: { label: 'Mic',        action: () => KaraokeApp.toggleVisualizer() },
-    q: { label: 'QR',         action: () => KaraokeApp.toggleQR() }
+    q: { label: 'QR',         action: () => KaraokeApp.toggleQR() },
+    f: { label: 'Fullscreen', action: () => KaraokeApp.toggleFullscreen() }
 };
 
 const KaraokeApp = {
@@ -454,13 +454,13 @@ SCORING: {
         const btn = this.elements.playPauseBtn;
         if (state === YT.PlayerState.PLAYING) {
             this.state.player.pauseVideo();
-            btn.innerHTML = '<span class="icon" aria-hidden="true">▶️</span> <span class="pcb-label">Play</span><kbd class="keycap">Z</kbd>';
+            btn.innerHTML = '<span class="icon" aria-hidden="true">▶️</span>';
         } else {
             // Resuming from goIdle() puts a song back on the stage, so the idle
             // flag has to be released or the idle loop would stay painted over it.
             this.state.idle = false;
             this.state.player.playVideo();
-            btn.innerHTML = '<span class="icon" aria-hidden="true">⏸️</span> <span class="pcb-label">Pause</span><kbd class="keycap">Z</kbd>';
+            btn.innerHTML = '<span class="icon" aria-hidden="true">⏸️</span>';
         }
     },
 
@@ -1304,22 +1304,6 @@ SCORING: {
         if (this.elements.customAlert) this.elements.customAlert.style.display = 'none';
     },
 
-    // Writes each button's <kbd> badge from the SHORTCUTS table. The HTML ships a
-    // sensible static fallback, but this guarantees the badge text, the
-    // aria-keyshortcuts attribute and the actual keydown map all agree.
-    syncShortcutBadges() {
-        document.querySelectorAll(".pcb-center button[keycap], .pcb-center button").forEach(btn => {
-            const kbd = btn.querySelector("kbd.keycap");
-            const declared = btn.getAttribute("aria-keyshortcuts");
-            if (!kbd || !declared) return;
-            const key = declared.toLowerCase();
-            const entry = SHORTCUTS[key];
-            if (!entry) return;
-            kbd.textContent = key.toUpperCase();
-            btn.setAttribute("title", `${entry.label} (${key.toUpperCase()})`);
-        });
-    },
-
     // Keeps aria-pressed honest on the mic toggle so its state is not carried by
     // colour and text alone.
     // The mic control is an icon-only circle inside the player, so its state is
@@ -1338,8 +1322,8 @@ SCORING: {
     },
 
     attachEventListeners() {
-        this.syncShortcutBadges();
-        document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));    },
+        document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
+    },
 
     // Maps physical keys (Z, C, B, F) to app actions.
     handleGlobalKeyDown(event) {

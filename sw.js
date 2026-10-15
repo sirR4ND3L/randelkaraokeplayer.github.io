@@ -1,4 +1,6 @@
-const CACHE_NAME = 'rk-remote-v2';
+// v3: clears caches written by the v2 worker, which stored every navigation
+// under the 'remote.html' key (see the fetch handler).
+const CACHE_NAME = 'rk-remote-v3';
 const CORE_ASSETS = [
     'remote.html',
     'manifest.json',
@@ -60,26 +62,51 @@ self.addEventListener('fetch', (event) => {
     if (url.origin !== location.origin) return;
 
     if (request.mode === 'navigate') {
+        // Only the remote has an offline shell. Caching *every* navigation
+        // under the 'remote.html' key meant a songbook, player or admin visit
+        // could overwrite the offline remote UI, and a later offline visit to
+        // any page was then answered with that last-cached document.
+        const isRemote = url.pathname.endsWith('/remote.html');
         event.respondWith(
             fetch(request)
                 .then((response) => {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put('remote.html', copy));
+                    if (response.ok && isRemote) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put('remote.html', copy));
+                    }
                     return response;
                 })
-                .catch(() => caches.match('remote.html'))
+                .catch(async () => {
+                    if (isRemote) {
+                        const cached = await caches.match('remote.html');
+                        return cached || Response.error();
+                    }
+                    // Other pages have no offline shell; fail rather than serve
+                    // a different page's HTML as their document.
+                    return Response.error();
+                })
         );
         return;
     }
 
     event.respondWith(
-        caches.match(request)
-            .then((cached) => cached || fetch(request).then((response) => {
+        caches.match(request).then((cached) => {
+            const network = fetch(request).then((response) => {
                 if (response.ok) {
                     const copy = response.clone();
                     caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
                 }
                 return response;
-            }))
+            });
+            if (cached) {
+                // Stale-while-revalidate: the cached copy is served instantly
+                // and refreshed in the background, so a deploy is picked up on
+                // the next visit instead of being pinned until CACHE_NAME
+                // changes.
+                network.catch(() => {});
+                return cached;
+            }
+            return network;
+        })
     );
 });

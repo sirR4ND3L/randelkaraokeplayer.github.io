@@ -42,10 +42,14 @@
     <!-- ?v= cache-buster: bump this number whenever style.css changes, otherwise a
          browser (or GitHub Pages) keeps serving the old stylesheet and silently
          ignores layout fixes. Keep it in step with the ?v on app.js below. -->
-    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="style.css?v=8">
     <link rel="manifest" href="manifest-player.json">
     <meta name="theme-color" content="#030303">
-    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    <!-- RawGit was sunset and only works because it redirects to jsDelivr;
+         request the library from jsDelivr directly. defer: the player only
+         needs QRCode at init, and app.js (deferred, later in the document)
+         runs after this either way. -->
+    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@gh-pages/qrcode.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Structured Data.
@@ -231,6 +235,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=7" defer></script>
+    <script src="app.js?v=8" defer></script>
 </body>
 </html>

@@ -32,7 +32,7 @@
     --overlay-gap: 14px;
     --overlay-radius: 16px;
     --overlay-bg: rgba(0, 0, 0, 0.55);
-    --overlay-max-w: 46%,
+    --overlay-max-w: 46%;
 
     --ctl-size: 38px;
     --ctl-gap: 7px;
@@ -660,8 +660,8 @@ input[type=range] {
        horizontal scroll and swallow the chip shadows. Overridden here. */
     overflow: visible;
     /* .glass-panel:hover enlarges the shadow; an overlay sitting on the video
-       should not react to the pointer that is over the video. */
-    border-radius: var(--overlay-radius);
+       should not react to the pointer that is over the video (see
+       .stage-overlay:hover below). */
     /* Keeps pointer events off the video behind it. */
     touch-action: manipulation;
     transition: var(--transition-fast);

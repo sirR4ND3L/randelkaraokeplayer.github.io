@@ -373,7 +373,7 @@ async function deleteSong(id) {
 
         if (error) throw error;
         if (!data || data.length === 0) {
-            throw new Error(`Song #${id} was NOT deleted. The database silently refused the request, which means the anon role is missing DELETE access to "${CONFIG.TABLE_NAME}". Run the policy in SECURITY-UPDATE.md §4.`);
+            throw new Error(`Song #${id} was NOT deleted. The database silently refused the request, which means the anon role is missing DELETE access to "${CONFIG.TABLE_NAME}". See "Songbook admin is not authenticated" in README.md.`);
         }
 
         showAlert(`Deleted song #${id}.`);
@@ -400,7 +400,7 @@ async function saveSong(id) {
             .select('id');
 
         if (error) throw error;
-        if (!data || data.length === 0) throw new Error(`Song #${id} was NOT updated. The anon role may be missing UPDATE access to "${CONFIG.TABLE_NAME}".`);
+        if (!data || data.length === 0) throw new Error(`Song #${id} was NOT updated. The anon role may be missing UPDATE access to "${CONFIG.TABLE_NAME}". See "Songbook admin is not authenticated" in README.md.`);
 
         showAlert('Updated!');
         loadSongs();

@@ -13,7 +13,7 @@ A premium, modern web-based Karaoke player designed with a sleek **Glassmorphism
 - **💯 Performance Scoring System:** Evaluates vocal energy and pitch steadiness in real time. Steady singing is rewarded and erratic pitch loses ground, while breathing between phrases is not punished. Includes a live floating score badge and a final overlay showing your rank (Legendary, Rockstar, Pro, Amateur, Beginner).
 
 ### How the score is calculated
-Every 200ms the app takes one sample of the microphone:
+Every 50ms (the `TICK_MS` setting in `SCORING`) the app takes one sample of the microphone:
 
 1. **Rest or voice?** Samples below the voice gate are ignored entirely — breathing between phrases cannot drag the score down.
 2. **How loud?** Energy above the gate maps to a credit that saturates, so a hotter microphone or a louder singer cannot simply buy a better score.
@@ -34,11 +34,13 @@ Pitch is detected by autocorrelation over the vocal range only (60–1200Hz), wi
 - **⌨️ Power-User Shortcuts:** 
   - `Z` - Play/Pause
   - `C` - Restart
-  - `B` - Cancel (Skip to Next)
-  - `F` - Fullscreen
+  - `B` - Skip to the next queued song
   - `M` - Toggle Microphone
-  - `Enter` - Search & Play
-  - `Shift + Enter` - Search & Reserve
+  - `Q` - Show/Hide the QR code
+  - `F` - Fullscreen
+
+  Song search lives on the phone remote, so the player itself no longer has
+  `Enter` / `Shift + Enter` shortcuts.
 
 ## 🚀 Getting Started
 
@@ -50,7 +52,7 @@ YouTube search runs through the backend proxy at `https://karaoke-backend-topaz.
 ### Installation
 The project is built entirely with frontend technologies.
 1. Download or clone this repository.
-2. Ensure you have all the core files (`index.html`, `style.css`, `app.js`, `scoreSound.mp3`).
+2. Ensure you have the core files (`index.html`, `style.css`, `app.js`, `soundEffects/scoreSound.mp3`).
 3. Run the project using a local development server (e.g., VS Code Live Server or Python HTTP Server).
 4. Open the local address in any modern web browser and start singing!
 
@@ -69,6 +71,22 @@ These are **required** in the `karaoke-backend-topaz` Vercel project and cannot 
 1. **`POST /api/karaoke-cache` must validate its payload.** The endpoint is reachable with no auth, so without server-side checks any visitor can remap a cached song query to an arbitrary `videoId` for every user. Validate the `videoId` against `/^[A-Za-z0-9_-]{11}$/`, cap the query length, and rate-limit by IP. (`app.js` performs the same checks as hygiene, but a client-side check is trivially bypassed and is **not** a security control.)
 2. **Review RLS on `remote_commands` and `online_players`.** Any client holding the anon key can insert command rows addressed to a specific `player_id`, so the policies should be reviewed to confirm only intended writes are permitted.
 3. `remote_commands.status` is expected to be `pending` → `ack` | `failed`. The player tolerates a `processing` value for atomic command claiming, but only if the column's `CHECK` constraint allows it.
+
+### Songbook admin is not authenticated
+
+`manage.html` (with `admin.js`) is a full write console for
+`karaoke_search_cache` and ships with no login. The anon key is public by
+design, so unless Row Level Security blocks it, anyone who opens the URL can
+add, edit or delete songs — and the console only works at all if RLS *allows*
+anon writes. `noindex` keeps search engines out, not people. The fix belongs in
+Supabase, not in this repo:
+
+1. Enable Supabase Auth and create an admin account.
+2. Rewrite the `karaoke_search_cache` write policies to require an
+   authenticated user. Reads stay public: the player, remote and songbook only
+   ever `SELECT`.
+3. Add a login step to `manage.html`, or move the console to a private
+   deployment.
 
 ### Known limitation: duplicated tabs
 The Player ID is persisted in `window.name`, so duplicating a player tab produces a second tab with the **same** Player ID. Both tabs will then poll and act on the same remote commands. Open a single player tab per Player ID. (`window.name` is also origin-scoped and reset on cross-origin navigation; `sessionStorage` would be a cleaner store if a behavior change is ever wanted.)

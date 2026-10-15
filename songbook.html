@@ -631,6 +631,16 @@
         let allSongsData = []; // Cache to allow re-rendering on window resize
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Song titles and artists come from the database (ultimately from the
+        // YouTube API or manual entry), so they are untrusted text. The tables
+        // below are built with innerHTML, so a crafted song title must not be
+        // able to close the tag and inject markup: escape everything first.
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[char]));
+        }
         
         let refreshTimer;
         supabaseClient
@@ -684,13 +694,13 @@
             // Matches the CSS 1025px breakpoint for layout consistency
             const isMobile = window.innerWidth <= 1024;
 
-            const renderRows = (data) => data.map(song => 
-                `<tr><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
+            const renderRows = (data) => data.map(song =>
+                `<tr><td>${escapeHtml(song.id)}</td><td>${escapeHtml(song.title)}</td><td>${escapeHtml(song.artist)}</td></tr>`
             ).join('');
 
             // Rows in the on-screen tables carry the song code so clicks can open the dialog
-            const renderInteractiveRows = (data) => data.map(song => 
-                `<tr data-code="${song.id}"><td>${song.id}</td><td>${song.title}</td><td>${song.artist}</td></tr>`
+            const renderInteractiveRows = (data) => data.map(song =>
+                `<tr data-code="${escapeHtml(song.id)}"><td>${escapeHtml(song.id)}</td><td>${escapeHtml(song.title)}</td><td>${escapeHtml(song.artist)}</td></tr>`
             ).join('');
 
             // Always populate the print-only table with the full data
