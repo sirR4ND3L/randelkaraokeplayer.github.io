@@ -6,7 +6,9 @@
 **Revision (2026-10-19b):** song numbers are now **random** `000000–999999`
 (zero-padded). The migration file was updated in place; if you already ran the
 sequential version, re-run it, then run the one-time backfill
-`supabase/migrations/2026-10-19b_randomize_existing_songs.sql`.
+`supabase/migrations/2026-10-19b_randomize_existing_songs.sql`. Code and the
+backend `?number=` fix are pushed and tested (31/31); the two SQL files still
+need to be run in Supabase.
 See [`RANDOM-SONG-NUMBERS-PLAN.md`](RANDOM-SONG-NUMBERS-PLAN.md).
 **Status:** Code complete and smoke-tested locally. The account-level steps below still have to be done in Supabase / Vercel.
 

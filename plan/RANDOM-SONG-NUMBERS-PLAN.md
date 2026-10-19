@@ -1,6 +1,8 @@
 # Random 6-Digit Song Numbers — Plan
 
-**Status:** 📋 Plan — awaiting approval
+**Status:** ✅ Implemented 2026-10-19 — code pushed and tested (31 automated
+checks). Pending manual steps: run the updated migration + one-time backfill in
+Supabase, then reprint the songbook.
 **Date:** 2026-10-19
 **Supersedes:** the numbering design in [`SONG-NUMBER-ADMIN-UPGRADE.md`](SONG-NUMBER-ADMIN-UPGRADE.md) (sections about `karaoke_song_number_seq`). Everything else there (admin roles, RLS, public submissions, cleanup) stays as implemented.
 
@@ -237,3 +239,21 @@ fallback fix above — deploy `karaoke-backend` too.
 | 2 | Random per insert via DB trigger + advisory lock | 📋 proposed |
 | 3 | Randomize the 175 existing songs too, or only new ones? | ✅ all 175 randomized (backfill file) |
 | 4 | Allow a deleted code to be reused later | 📋 proposed: yes (simple) |
+
+---
+
+## 11. Implementation result
+
+- Migration rewritten to the random trigger + `0–999999` CHECK; the old
+  `karaoke_song_number_seq` is dropped.
+- One-time backfill file added (`2026-10-19b_randomize_existing_songs.sql`).
+- Zero-padding wired through `admin.js`, `app.js`, `remote.html`,
+  `songbook.html`, `manage.html`; SW cache bumped.
+- Backend fix: six-digit codes no longer fall back to the internal id, so
+  `?number=000042` cannot resolve row id 42 (found by the test suite).
+- Verification: 31/31 automated headless checks passed — padding in list,
+  pad preview, modal, queue chip, print table, manage cards/search, plus live
+  backend lookups (`?number=100000` OK, `?number=000042` 404,
+  `?id=35` legacy fallback OK).
+- Still manual: run the two SQL files, then verify a leading-zero code appears
+  (the 175-song backfill is ~100% likely to produce at least one) and reprint.
