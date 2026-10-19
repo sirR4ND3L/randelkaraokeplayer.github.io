@@ -1003,8 +1003,9 @@
                 9: 'soundEffects/nine.mp3',
                 0: 'soundEffects/zero.mp3'
             },
-            // Songbook numbers come from karaoke_search_cache.id, which the
-            // player resolves through CACHE_ENDPOINT?id=<code>.
+            // Songbook numbers are the 6-digit song_number column; the player
+            // resolves them through CACHE_ENDPOINT?number=<code>. `id` is the
+            // fallback for rows that predate the number migration.
             MAX_CODE_LENGTH: 6,
             MAX_RENDERED_SONGS: 300,
             // Matches the app.js polling window: 10 attempts x 2s.
@@ -1378,9 +1379,11 @@
 
             let failure = null;
             try {
+                // select() = all columns so the page keeps working before and
+                // after the song_number migration (falls back to id below).
                 const { data, error } = await supabaseClient
                     .from('karaoke_search_cache')
-                    .select('id, video_title')
+                    .select()
                     .eq('is_verified', true)
                     .order('video_title', { ascending: true });
 
@@ -1390,7 +1393,7 @@
                         const parts = String(song.video_title).split(' - ');
                         const title = parts[0];
                         const artist = parts.slice(1).join(' - ') || 'N/A';
-                        const code = String(song.id);
+                        const code = String(song.song_number != null ? song.song_number : song.id);
                         return { code, title, artist, search: (code + ' ' + title + ' ' + artist).toUpperCase() };
                     });
                 }
@@ -1595,9 +1598,14 @@
             }
 
             box.className = 'pad-preview hint-state';
-            box.innerText = songbookLoading
-                ? 'Songbook is still loading…'
-                : '#' + code + ' is not in the songbook — it will still be sent.';
+            if (code.length < CONFIG.MAX_CODE_LENGTH) {
+                // Song numbers are 6 digits; a shorter prefix cannot exist.
+                box.innerText = 'Keep typing — song numbers are ' + CONFIG.MAX_CODE_LENGTH + ' digits.';
+            } else {
+                box.innerText = songbookLoading
+                    ? 'Songbook is still loading…'
+                    : '#' + code + ' is not in the songbook — it will still be sent.';
+            }
         }
 
         // ---------------------------------------------------------------
@@ -1713,35 +1721,47 @@
             }).catch(e => console.error('Cache save error:', e));
         }
 
+        // Noise words that appear in karaoke video titles but are not part of
+        // the song identity. They are ignored so "Perfect Ed Sheeran Karaoke"
+        // still matches a title carrying "(HD Karaoke Version)".
+        const KARAOKE_NOISE_WORDS = new Set([
+            'karaoke', 'version', 'lyrics', 'lyric', 'instrumental', 'minus',
+            'backing', 'track', 'videoke', 'hd', 'hq', 'audio', 'official',
+            'video', 'screen', 'guide', 'melody', 'songs', 'song', 'full',
+            'original', 'the', 'a', 'an', 'and', 'of', 'in', 'on', 'with',
+            'by', 'ft', 'feat', 'featuring'
+        ]);
+
+        const tokenizeForMatch = (text) => String(text || '')
+            .toLowerCase()
+            .replace(/['’`]/g, '')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean);
+
+        // A result is relevant when every meaningful query word (title +
+        // artist) appears in its title. Extra title words are allowed; titles
+        // matching only part of the query are rejected.
+        function isRelevant(resultTitle, originalQuery) {
+            const doc = new DOMParser().parseFromString(String(resultTitle || ''), 'text/html');
+            const decodedTitle = doc.documentElement.textContent.toLowerCase();
+
+            const titleTokens = tokenizeForMatch(decodedTitle);
+            const titleSet = new Set(titleTokens);
+            const squashedTitle = titleTokens.join('');
+
+            const queryTokens = tokenizeForMatch(originalQuery)
+                .filter(token => !KARAOKE_NOISE_WORDS.has(token));
+            if (!queryTokens.length) return false;
+
+            return queryTokens.every(token =>
+                titleSet.has(token) || (token.length >= 4 && squashedTitle.includes(token))
+            );
+        }
+
         async function fetchFromYouTubeAPI(query) {
             const endpoint = CONFIG.YOUTUBE_SEARCH_ENDPOINT;
             if (!endpoint) return null;
-
-            const isRelevant = (resultTitle, originalQuery) => {
-                const doc = new DOMParser().parseFromString(resultTitle, 'text/html');
-                const decodedTitle = doc.documentElement.textContent.toLowerCase();
-                const cleanTitle = decodedTitle.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-                const cleanQuery = originalQuery.toLowerCase().replace(/karaoke/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-                if (!cleanQuery) return false;
-
-                const segments = decodedTitle.split(/[-|()\[\]]/).map(s =>
-                    s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-                ).filter(s => s.length > 0);
-
-                const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 0);
-                const squashedQuery = cleanQuery.replace(/\s+/g, '');
-
-                return segments.some(seg => {
-                    const segWords = seg.split(/\s+/).filter(w => w.length > 0);
-                    const squashedSeg = seg.replace(/\s+/g, '');
-                    const isPhraseFound = segWords.some((_, i) =>
-                        queryWords.every((word, j) => segWords[i + j] === word)
-                    );
-                    const isSquashedMatch = squashedSeg.includes(squashedQuery);
-                    const wordCountDiff = Math.abs(segWords.length - queryWords.length);
-                    return (isPhraseFound || isSquashedMatch) && wordCountDiff <= 2;
-                });
-            };
 
             for (const channelId of CONFIG.PREFERRED_CHANNELS) {
                 try {
@@ -1780,6 +1800,12 @@
             const code = sanitizeNumberInput(input.value);
             if (!code) {
                 showToast('Enter a song number', 'error', 'Tap the keypad below.');
+                return;
+            }
+            // Song numbers are 6 digits. A shorter value is only allowed when it
+            // matches a loaded row (pre-migration ids or a partial songbook).
+            if (code.length < CONFIG.MAX_CODE_LENGTH && !resolveSongByCode(code)) {
+                showToast('Enter all ' + CONFIG.MAX_CODE_LENGTH + ' digits', 'error', 'Song numbers are 6 digits long.');
                 return;
             }
 

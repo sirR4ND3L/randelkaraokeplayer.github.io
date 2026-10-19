@@ -28,7 +28,10 @@ Pitch is detected by autocorrelation over the vocal range only (60–1200Hz), wi
 
 - **🎉 Custom Score Sounds:** Plays celebration or feedback sounds (`scoreSound.mp3`) when a song ends.
 - **📋 Smart Queue System:** Add and manage songs with a beautiful "Up Next" card interface. The queue seamlessly auto-plays the next song the moment your score sound finishes.
-- **🔍 Robust Search:** Integrated YouTube search through the backend proxy, with a Supabase-backed cache in front of it and a relevance filter that rejects off-target results.
+- **🔍 Robust Search:** Integrated YouTube search through the backend proxy, with a Supabase-backed cache in front of it and a relevance filter that rejects off-target results. The same cache-first flow is available in the admin console (`manage.html`): search YouTube, save the result to Supabase, and it is instantly playable by title from the remote.
+- **🔢 6-Digit Song Numbers:** Every song carries a unique auto-generated 6-digit number (`song_number`, from a Postgres sequence) that replaces the internal database id as the public "songbook number". Numbers are generated for new songs in every path (manual add, YouTube cache, public submissions) and can never collide.
+- **👑 Admin Console with Public Access:** `manage.html` has a real admin login (Supabase Auth). Admins can edit, verify, delete and run maintenance; signed-out guests can still search YouTube and add songs, which are saved as "pending review" and published once an admin verifies them.
+- **🧹 Self-Cleaning Presence Tables:** stale rows in `online_players` and old `remote_commands` entries are pruned automatically once a day by the backend (`/api/cleanup`), with a manual "Clean up now" button for admins.
 - **📱 Phone Remote:** Pair via QR code or the printed Player ID to queue songs from a phone (`remote.html`) or the Android app.
 - **📈 SEO & Accessibility Optimized:** Valid `title`/description/canonical/robots meta, inline `WebSite` + `WebApplication` JSON-LD, Open Graph and Twitter cards, a `sitemap.xml` declared in `robots.txt`, a custom `404.html`, and visible on-page copy (no hidden keyword text). `remote.html`, `songbook.html` and `manage.html` are `noindex` app surfaces and stay out of the sitemap.
 - **⌨️ Power-User Shortcuts:** 
@@ -68,25 +71,54 @@ The YouTube API key is never exposed to the browser — it lives only in the bac
 ### Backend requirements (not enforced client-side)
 These are **required** in the `karaoke-backend-topaz` Vercel project and cannot be fixed from this repo:
 
-1. **`POST /api/karaoke-cache` must validate its payload.** The endpoint is reachable with no auth, so without server-side checks any visitor can remap a cached song query to an arbitrary `videoId` for every user. Validate the `videoId` against `/^[A-Za-z0-9_-]{11}$/`, cap the query length, and rate-limit by IP. (`app.js` performs the same checks as hygiene, but a client-side check is trivially bypassed and is **not** a security control.)
-2. **Review RLS on `remote_commands` and `online_players`.** Any client holding the anon key can insert command rows addressed to a specific `player_id`, so the policies should be reviewed to confirm only intended writes are permitted.
-3. `remote_commands.status` is expected to be `pending` → `ack` | `failed`. The player tolerates a `processing` value for atomic command claiming, but only if the column's `CHECK` constraint allows it.
+1. **Deploy the updated API routes.** `karaoke-cache` validates and rate-limits its payload, `public-songs` handles guest submissions, and `cleanup` prunes stale presence/command rows.
+2. **Add the `CRON_SECRET` environment variable** (Production + Preview) so the daily `/api/cleanup` cron can run. `vercel.json` schedules it at 03:00.
+3. **Review RLS on `remote_commands` and `online_players`.** Any client holding the anon key can insert command rows addressed to a specific `player_id`, so the policies should be reviewed to confirm only intended writes are permitted. The cleanup job runs server-side and is unaffected by these policies.
+4. `remote_commands.status` is expected to be `pending` → `ack` | `failed`. The player tolerates a `processing` value for atomic command claiming, but only if the column's `CHECK` constraint allows it.
 
-### Songbook admin is not authenticated
+### Songbook admin access (Supabase Auth + RLS)
 
-`manage.html` (with `admin.js`) is a full write console for
-`karaoke_search_cache` and ships with no login. The anon key is public by
-design, so unless Row Level Security blocks it, anyone who opens the URL can
-add, edit or delete songs — and the console only works at all if RLS *allows*
-anon writes. `noindex` keeps search engines out, not people. The fix belongs in
-Supabase, not in this repo:
+`manage.html` (with `admin.js`) is a write console for `karaoke_search_cache`.
+It now has two modes:
 
-1. Enable Supabase Auth and create an admin account.
-2. Rewrite the `karaoke_search_cache` write policies to require an
-   authenticated user. Reads stay public: the player, remote and songbook only
-   ever `SELECT`.
-3. Add a login step to `manage.html`, or move the console to a private
-   deployment.
+| Capability | Guest (signed out) | Admin (signed in) |
+|---|---|---|
+| Browse/search the songbook | ✅ | ✅ |
+| Search YouTube + cache results | ✅ | ✅ |
+| Add songs manually / from search | ✅ saved as **pending review** | ✅ published immediately |
+| Edit, verify, delete songs | ❌ | ✅ |
+| Regenerate numbers, run cleanup | ❌ | ✅ |
+
+Enforcement lives in Supabase, not in the browser:
+
+1. Run `supabase/migrations/2026-10-19_song_numbers_admin_cleanup.sql`
+   (see `supabase/README.md` for the full walkthrough).
+2. Enable **Authentication → Providers → Email**, disable public sign-up,
+   and create the admin user by hand.
+3. Add that user's UID to `public.admin_users`. Only UIDs in that table pass
+   `is_admin()`.
+4. Reads stay public (`songbook_read_all`). Writes are admin-only. Public
+   submissions go through the backend `/api/public-songs` endpoint, which
+   validates and rate-limits them, then inserts with `is_verified = false`.
+   Set `PUBLIC_AUTO_VERIFY=true` in the backend to publish them instantly
+   instead of pending review.
+
+### 6-digit song numbers
+
+- `karaoke_search_cache.song_number` is generated by
+  `karaoke_song_number_seq` (100000–999999) and enforced unique by an index.
+- The player, remote, songbook and deep links (`?code=`) all use this number.
+  The internal `id` remains for CRUD keys and RLS only.
+- Old numeric links that used the internal id still resolve through the
+  backend's id fallback, but printed songbooks should be regenerated.
+
+### Scheduled cleanup (online_players / remote_commands)
+
+The backend runs `GET /api/cleanup` daily at 03:00 (`vercel.json` cron) and
+deletes `online_players` rows stale for more than 2 days and `remote_commands`
+rows older than 2 days. It is protected by `CRON_SECRET` (fails closed when
+the variable is missing). Admins can trigger the same cleanup from
+`manage.html` via the `cleanup_presence_and_commands()` RPC.
 
 ### Optional: now-playing status for the remote
 

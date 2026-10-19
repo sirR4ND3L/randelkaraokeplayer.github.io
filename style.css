@@ -1491,6 +1491,140 @@ body.admin-page .modal-content {
 }
 
 /* =========================================================================
+   ADMIN PAGE - ROLES, SEARCH & CACHE RESULTS, MAINTENANCE
+   Added with the 6-digit song numbers + admin roles upgrade.
+   ========================================================================= */
+
+/* --- Mode gating: public mode hides admin controls, admin mode hides
+       the public-only helpers. This is UX only; RLS is the real gate. --- */
+body.public-mode [data-admin-only] { display: none !important; }
+body.admin-mode [data-public-only] { display: none !important; }
+
+/* --- Login panel --- */
+body.admin-page .admin-auth {
+    max-width: 900px;
+    margin: 0 auto 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 12px 16px;
+}
+
+body.admin-page .auth-status { color: rgb(159, 209, 250); font-size: 14px; }
+
+body.admin-page .auth-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+body.admin-page .auth-actions input { margin-bottom: 0; width: 180px; }
+body.admin-page .auth-actions button { width: auto; padding: 0 18px; }
+body.admin-page #logoutBtn { background: #475569 !important; color: #fff; }
+
+/* --- Search mode toggle + cache checkbox --- */
+body.admin-page .search-toolbar {
+    max-width: 900px;
+    margin: 0 auto 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+body.admin-page .mode-btns { display: flex; gap: 8px; }
+body.admin-page .mode-btn { width: auto; padding: 0 18px; background: rgba(255, 255, 255, 0.08) !important; color: #e2e8f0 !important; }
+body.admin-page .mode-btn.active { background: #2563eb !important; color: #fff !important; }
+
+body.admin-page .auto-cache {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    color: rgb(203, 213, 225);
+    font-size: 14px;
+}
+
+body.admin-page .auto-cache input { width: auto; margin: 0; }
+
+/* --- YouTube search results --- */
+body.admin-page .search-results {
+    max-width: 900px;
+    margin: 0 auto 22px;
+    display: grid;
+    gap: 14px;
+}
+
+body.admin-page .search-status { color: rgb(203, 213, 225); text-align: center; margin: 12px 0; }
+
+body.admin-page .result-card {
+    display: flex;
+    gap: 14px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 14px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+body.admin-page .result-thumb img { width: 140px; border-radius: 12px; display: block; }
+body.admin-page .result-meta { flex: 1; min-width: 0; display: grid; gap: 8px; }
+body.admin-page .result-title { font-weight: 600; color: #fff; margin: 0; overflow-wrap: anywhere; }
+body.admin-page .result-card input { margin-bottom: 0; }
+body.admin-page .result-id { font-size: 12px; color: rgb(203, 213, 225); margin: 0; overflow-wrap: anywhere; }
+body.admin-page .result-id a { color: #9fd1fa; }
+body.admin-page .result-meta .button-row { display: flex; gap: 8px; }
+body.admin-page .result-meta .button-row button { flex: 1; }
+body.admin-page .add-result-btn { background: #22c55e !important; color: #052e16 !important; }
+body.admin-page .result-preview iframe {
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    border-radius: 12px;
+}
+
+/* --- Badges on song cards --- */
+body.admin-page .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    vertical-align: middle;
+}
+
+body.admin-page .badge-pending { background: #f59e0b; color: #111; }
+body.admin-page .badge-verified { background: #22c55e; color: #052e16; }
+
+body.admin-page .song-line { color: rgb(203, 213, 225); overflow-wrap: anywhere; }
+
+/* --- Maintenance panel --- */
+body.admin-page .admin-maintenance {
+    max-width: 900px;
+    margin: 0 auto 22px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 14px 18px;
+}
+
+body.admin-page .admin-maintenance summary {
+    cursor: pointer;
+    font-weight: 700;
+    list-style: none;
+}
+
+body.admin-page .admin-maintenance summary::-webkit-details-marker { display: none; }
+body.admin-page .admin-maintenance button { margin: 10px 0; }
+
+@media (max-width: 700px) {
+    body.admin-page .result-card { flex-direction: column; }
+    body.admin-page .result-thumb img { width: 100%; }
+}
+
+/* =========================================================================
    ADMIN PAGE - MOBILE & ANDROID RESPONSIVE PASS
    ========================================================================= */
 

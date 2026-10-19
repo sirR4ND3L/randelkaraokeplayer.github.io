@@ -1,6 +1,6 @@
-// v3: clears caches written by the v2 worker, which stored every navigation
-// under the 'remote.html' key (see the fetch handler).
-const CACHE_NAME = 'rk-remote-v3';
+// v4: remote.html renders 6-digit song numbers (song_number column) and falls
+// back to id, so the cached shell is refreshed once on upgrade.
+const CACHE_NAME = 'rk-remote-v4';
 const CORE_ASSETS = [
     'remote.html',
     'manifest.json',

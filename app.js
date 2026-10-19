@@ -322,9 +322,16 @@ SCORING: {
     // guests use from their phones. What stays here is the songbook-number lookup
     // that remote commands and the songbook bridge arrive through.
 
-    // Fetch a cached song's video details by its songbook number.
+    // Fetch a cached song's video details by its 6-digit songbook number.
     async fetchSongByCode(id) {
-        const res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(id)}`);
+        const code = String(id).trim();
+
+        // `number` is the 6-digit song_number. A 400 means the deployed backend
+        // does not know that parameter yet, so retry the legacy `id` form.
+        let res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?number=${encodeURIComponent(code)}`);
+        if (res.status === 400) {
+            res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(code)}`);
+        }
 
         // Explicit check for 404 Not Found or 204 No Content
         if (res.status === 404 || res.status === 204) {
@@ -336,7 +343,12 @@ SCORING: {
 
         const data = await res.json();
         if (data && data.videoId) {
-            return { found: true, videoId: data.videoId, videoTitle: data.videoTitle };
+            return {
+                found: true,
+                videoId: data.videoId,
+                videoTitle: data.videoTitle,
+                songNumber: data.songNumber != null ? String(data.songNumber) : code
+            };
         }
         return { found: false, reason: 'not_found' };
     },

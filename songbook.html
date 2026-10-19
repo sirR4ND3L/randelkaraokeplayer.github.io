@@ -658,9 +658,11 @@
             .subscribe();
 
         async function loadSongbook() {
+            // select() = all columns so the page keeps working before and after
+            // the song_number migration (it falls back to id below).
             const { data, error } = await supabaseClient
                 .from('karaoke_search_cache')
-                .select('id, video_title')
+                .select()
                 .eq('is_verified', true)
                 .order('video_title', { ascending: true });
 
@@ -669,11 +671,13 @@
                 return;
             }
 
-            // Format the data for the renderer
+            // Format the data for the renderer. The printed/displayed number is
+            // the 6-digit song_number; id is only the fallback for rows that
+            // predate the migration.
             const formattedSongs = data.map(song => {
                 const parts = song.video_title.split(' - ');
                 return {
-                    id: song.id,
+                    id: song.song_number != null ? song.song_number : song.id,
                     title: parts[0],
                     artist: parts.slice(1).join(' - ') || 'N/A'
                 };
