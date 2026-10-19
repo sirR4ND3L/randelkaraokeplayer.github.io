@@ -15,6 +15,10 @@ const SHORTCUTS = {
     f: { label: 'Fullscreen', action: () => KaraokeApp.toggleFullscreen() }
 };
 
+// Song codes are six slots including leading zeros, like a karaoke machine
+// (42 -> "000042", 0 -> "000000"). The database stores plain integers.
+const formatSongNumber = (value) => String(value ?? '').padStart(6, '0');
+
 const KaraokeApp = {
     // --- 1. Configuration & Constants ---
     // Stores API keys, endpoints, and asset paths used throughout the app.
@@ -323,14 +327,17 @@ SCORING: {
     // that remote commands and the songbook bridge arrive through.
 
     // Fetch a cached song's video details by its 6-digit songbook number.
+    // Codes may carry leading zeros, so numeric input is padded to six slots
+    // ("42" -> "000042") before the lookup.
     async fetchSongByCode(id) {
-        const code = String(id).trim();
+        const original = String(id).trim();
+        const code = /^\d{1,6}$/.test(original) ? original.padStart(6, '0') : original;
 
         // `number` is the 6-digit song_number. A 400 means the deployed backend
         // does not know that parameter yet, so retry the legacy `id` form.
         let res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?number=${encodeURIComponent(code)}`);
         if (res.status === 400) {
-            res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(code)}`);
+            res = await fetch(`${this.CONFIG.CACHE_ENDPOINT}?id=${encodeURIComponent(original)}`);
         }
 
         // Explicit check for 404 Not Found or 204 No Content
@@ -347,7 +354,7 @@ SCORING: {
                 found: true,
                 videoId: data.videoId,
                 videoTitle: data.videoTitle,
-                songNumber: data.songNumber != null ? String(data.songNumber) : code
+                songNumber: data.songNumber != null ? formatSongNumber(data.songNumber) : code
             };
         }
         return { found: false, reason: 'not_found' };
@@ -356,8 +363,9 @@ SCORING: {
     // Shared number-lookup used by the search bar AND remote songbook requests.
     async playSongByNumber(id, playNow = true) {
         if (this.state.isScoreRevealed) return false;
-        const code = String(id).trim();
-        if (!code) return false;
+        const original = String(id).trim();
+        if (!original) return false;
+        const code = /^\d{1,6}$/.test(original) ? original.padStart(6, '0') : original;
 
         try {
             const result = await this.fetchSongByCode(code);
@@ -525,7 +533,7 @@ SCORING: {
             const num = document.createElement("span");
             num.className = "queue-chip-num";
             num.textContent = song.queueNumber != null && song.queueNumber !== ""
-                ? String(song.queueNumber)
+                ? formatSongNumber(song.queueNumber)
                 : String(index + 1);
 
             const remove = document.createElement("button");
@@ -1330,7 +1338,7 @@ SCORING: {
             playNow,
             row.video_title || `Video: ${row.video_id}`,
             null,
-            row.song_code != null ? String(row.song_code) : null
+            row.song_code != null ? formatSongNumber(row.song_code) : null
         );
         return true;
     },

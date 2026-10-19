@@ -1,6 +1,6 @@
-// v4: remote.html renders 6-digit song numbers (song_number column) and falls
-// back to id, so the cached shell is refreshed once on upgrade.
-const CACHE_NAME = 'rk-remote-v4';
+// v5: song codes are random 000000-999999 and render zero-padded, so the
+// cached remote shell is refreshed once on upgrade.
+const CACHE_NAME = 'rk-remote-v5';
 const CORE_ASSETS = [
     'remote.html',
     'manifest.json',

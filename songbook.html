@@ -641,6 +641,10 @@
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[char]));
         }
+
+        // Song codes render in six slots including leading zeros, like a
+        // karaoke machine (42 -> "000042", 0 -> "000000").
+        const formatSongNumber = (value) => String(value ?? '').padStart(6, '0');
         
         let refreshTimer;
         supabaseClient
@@ -677,7 +681,7 @@
             const formattedSongs = data.map(song => {
                 const parts = song.video_title.split(' - ');
                 return {
-                    id: song.song_number != null ? song.song_number : song.id,
+                    id: formatSongNumber(song.song_number != null ? song.song_number : song.id),
                     title: parts[0],
                     artist: parts.slice(1).join(' - ') || 'N/A'
                 };

@@ -5,6 +5,11 @@
 migration (`supabase/README.md`), create the admin user, deploy `karaoke-backend`
 with `CRON_SECRET`. See "Implementation notes" at the bottom, and the
 step-by-step [`SONG-NUMBER-ADMIN-DEPLOYMENT-CHECKLIST.md`](SONG-NUMBER-ADMIN-DEPLOYMENT-CHECKLIST.md).
+**Revision (2026-10-19b):** ⚠️ Feature A below (sequence-based 6-digit numbers
+`100000`–`999999`) was **replaced** — numbers are now **random** across the full
+`000000`–`999999` range, displayed zero-padded. See
+[`RANDOM-SONG-NUMBERS-PLAN.md`](RANDOM-SONG-NUMBERS-PLAN.md) for the current
+design. Everything else in this document still applies.
 **Scope:** `randelkaraokeplayer.github.io` (frontend) + `karaoke-backend` (Vercel API) + Supabase schema/RLS
 **Goal:** Give every song a unique auto-generated 6-digit number, make it the search key everywhere, turn `manage.html` into a search + cache console with real admin roles, and prune stale presence/command data automatically.
 

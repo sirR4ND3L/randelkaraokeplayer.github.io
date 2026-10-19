@@ -910,7 +910,7 @@
                     <p class="card-label">Song Number</p>
                     <button id="padSoundBtn" class="toggle-btn" type="button" onclick="togglePadSound()" aria-pressed="true">🔊 Sound</button>
                 </div>
-                <div id="padPreview" class="pad-preview hint-state" aria-live="polite">Enter a songbook number</div>
+                <div id="padPreview" class="pad-preview hint-state" aria-live="polite">Enter a 6-digit song number</div>
                 <div class="pad-grid" role="group" aria-label="Number keypad">
                     <button class="pad-key" type="button" onclick="pressPadKey('1')" aria-label="1">1</button>
                     <button class="pad-key" type="button" onclick="pressPadKey('2')" aria-label="2">2</button>
@@ -1022,6 +1022,10 @@
             ack: 15,
             fail: [30, 40, 30]
         };
+
+        // Song codes render in six slots including leading zeros, like a
+        // karaoke machine (42 -> "000042", 0 -> "000000").
+        const formatSongNumber = (value) => String(value ?? '').padStart(6, '0');
 
         const supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
@@ -1393,7 +1397,7 @@
                         const parts = String(song.video_title).split(' - ');
                         const title = parts[0];
                         const artist = parts.slice(1).join(' - ') || 'N/A';
-                        const code = String(song.song_number != null ? song.song_number : song.id);
+                        const code = formatSongNumber(song.song_number != null ? song.song_number : song.id);
                         return { code, title, artist, search: (code + ' ' + title + ' ' + artist).toUpperCase() };
                     });
                 }
@@ -1552,7 +1556,7 @@
 
             el('numberPad').classList.toggle('hidden', !isNumber);
             el('quickHint').innerText = isNumber
-                ? 'Tap the keypad to enter the songbook number.'
+                ? 'Tap the keypad to enter the 6-digit song number (000000–999999).'
                 : 'Not in the songbook? Search by title/artist for best results.';
 
             input.value = '';
@@ -1584,7 +1588,7 @@
 
             if (!code) {
                 box.className = 'pad-preview hint-state';
-                box.innerText = 'Enter a songbook number';
+                box.innerText = 'Enter a 6-digit song number';
                 return;
             }
 
@@ -1600,7 +1604,7 @@
             box.className = 'pad-preview hint-state';
             if (code.length < CONFIG.MAX_CODE_LENGTH) {
                 // Song numbers are 6 digits; a shorter prefix cannot exist.
-                box.innerText = 'Keep typing — song numbers are ' + CONFIG.MAX_CODE_LENGTH + ' digits.';
+                box.innerText = 'Keep typing — song numbers are ' + CONFIG.MAX_CODE_LENGTH + ' digits (000000–999999).';
             } else {
                 box.innerText = songbookLoading
                     ? 'Songbook is still loading…'

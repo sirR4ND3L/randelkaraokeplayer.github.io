@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Randel Karaoke Player - schema upgrade (2026-10-19)
 --
---   1. Unique 6-digit song numbers (karaoke_search_cache.song_number)
+--   1. Random 6-digit song codes 000000-999999 (karaoke_search_cache.song_number)
 --   2. `source` column ('admin' | 'public' | 'auto' | 'import')
 --   3. Admin registry (admin_users) + RLS for karaoke_search_cache
 --   4. Cleanup indexes + cleanup_presence_and_commands() for the
@@ -11,78 +11,113 @@
 --   Project -> SQL Editor -> New query -> paste -> Run
 --
 -- Safe to re-run: every statement is guarded with IF NOT EXISTS / DO blocks.
--- Run it while nobody is inserting songs (the NOT NULL step at the end
--- assumes every row got a number in the backfill above it).
+-- Existing codes are NEVER reshuffled by a re-run; only rows whose
+-- song_number is NULL get one. To randomize already-numbered songs use
+-- 2026-10-19b_randomize_existing_songs.sql (one-time, deliberate).
+-- Run while nobody is inserting songs (the NOT NULL step assumes every row
+-- got a code in the backfill above it).
 -- ============================================================================
 
 
 -- ----------------------------------------------------------------------------
--- 1. UNIQUE 6-DIGIT SONG NUMBERS
+-- 1. RANDOM 6-DIGIT SONG CODES (000000-999999)
 -- ----------------------------------------------------------------------------
 
+-- Stored as an integer; the UI zero-pads for display (42 -> "000042").
 -- Nullable first so existing rows can be backfilled before constraints land.
 alter table public.karaoke_search_cache
   add column if not exists song_number integer;
 
--- Backfill: assign 100000, 100001, ... in id order to every row that has none.
-with numbered as (
-  select id,
-         100000 + row_number() over (order by id) - 1 as candidate
-  from public.karaoke_search_cache
-  where song_number is null
-)
-update public.karaoke_search_cache c
-set song_number = n.candidate
-from numbered n
-where c.id = n.id;
+-- Backfill every row that has no code yet with a random, unused one.
+-- A random pick can collide (birthday paradox), so each candidate is checked
+-- against the table; the unique index created below remains the final guard.
+do $$
+declare
+  r record;
+  candidate integer;
+begin
+  -- One lock for all number assignment; held until this transaction ends.
+  perform pg_advisory_xact_lock(20261019, 1);
 
--- One number, one song. This index is the final guarantee against conflicts.
+  for r in
+    select id from public.karaoke_search_cache
+     where song_number is null
+     order by id
+  loop
+    loop
+      candidate := floor(random() * 1000000)::int;   -- 0 .. 999999
+      exit when not exists (
+        select 1 from public.karaoke_search_cache where song_number = candidate
+      );
+    end loop;
+
+    update public.karaoke_search_cache
+       set song_number = candidate
+     where id = r.id;
+  end loop;
+end $$;
+
+-- One code, one song. This index is the final guarantee against conflicts.
 create unique index if not exists karaoke_search_cache_song_number_key
   on public.karaoke_search_cache (song_number);
 
--- Exactly 6 digits, 100000-999999 (900,000 songs max).
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'karaoke_search_cache_song_number_range'
-      and conrelid = 'public.karaoke_search_cache'::regclass
-  ) then
-    alter table public.karaoke_search_cache
-      add constraint karaoke_search_cache_song_number_range
-      check (song_number between 100000 and 999999);
-  end if;
-end $$;
+-- Six slots including leading zeros: 000000-999999 (1,000,000 codes).
+-- Dropped and recreated so databases that ran the sequential version are
+-- upgraded from the old 100000-999999 range.
+alter table public.karaoke_search_cache
+  drop constraint if exists karaoke_search_cache_song_number_range;
+alter table public.karaoke_search_cache
+  add constraint karaoke_search_cache_song_number_range
+  check (song_number between 0 and 999999);
 
 alter table public.karaoke_search_cache
   alter column song_number set not null;
 
--- Generator for every future insert, whatever the path (admin UI, backend
--- cache, public submission). Sequence values guarantee uniqueness under
--- concurrent inserts, so no random retry logic is needed anywhere.
-create sequence if not exists public.karaoke_song_number_seq
-  start with 100000
-  maxvalue 999999;
-
--- Continue after the highest backfilled number. On an empty table this
--- leaves the sequence at 100000. Only moves the sequence FORWARD, so
--- re-running the migration can never cause a duplicate.
-do $$
+-- Random generator for every future insert, whatever the path (admin UI,
+-- backend cache, public submission, SQL). Covers all of them, so no
+-- application code has to generate or retry codes.
+create or replace function public.assign_random_song_number()
+returns trigger
+language plpgsql
+as $$
 declare
-  max_n bigint;
-  last_n bigint;
+  candidate integer;
+  attempts  integer := 0;
 begin
-  select coalesce(max(song_number), 99999) into max_n from public.karaoke_search_cache;
-  select last_value into last_n from public.karaoke_song_number_seq;
-  if max_n > last_n then
-    perform setval('public.karaoke_song_number_seq', max_n);
+  -- Explicit codes are respected (imports/fixes can still set one).
+  if new.song_number is not null then
+    return new;
   end if;
+
+  -- Serialize selection so two concurrent inserts cannot pick the same code.
+  -- Transaction-scoped: released when the insert commits or rolls back.
+  perform pg_advisory_xact_lock(20261019, 1);
+
+  loop
+    candidate := floor(random() * 1000000)::int;   -- 0 .. 999999
+    exit when not exists (
+      select 1 from public.karaoke_search_cache where song_number = candidate
+    );
+
+    attempts := attempts + 1;
+    if attempts >= 200 then
+      raise exception 'Could not allocate a free song number after % attempts', attempts;
+    end if;
+  end loop;
+
+  new.song_number := candidate;
+  return new;
 end $$;
 
+drop trigger if exists karaoke_random_song_number on public.karaoke_search_cache;
+create trigger karaoke_random_song_number
+  before insert on public.karaoke_search_cache
+  for each row execute function public.assign_random_song_number();
+
+-- Retire the old sequential generator (harmless if it was never created).
 alter table public.karaoke_search_cache
-  alter column song_number set default nextval('public.karaoke_song_number_seq');
-alter sequence public.karaoke_song_number_seq
-  owned by public.karaoke_search_cache.song_number;
+  alter column song_number set default null;
+drop sequence if exists public.karaoke_song_number_seq;
 
 -- The internal id PK (karaoke_search_cache.id) can fall behind the table when
 -- rows were ever seeded with explicit ids. New inserts then fail with
@@ -268,7 +303,14 @@ grant execute on function public.cleanup_presence_and_commands() to authenticate
 --        max(song_number) as last_number
 --   from public.karaoke_search_cache;
 --
--- select last_value, is_called from public.karaoke_song_number_seq;
+-- -- Random generator present:
+-- select tgname from pg_trigger
+--  where tgname = 'karaoke_random_song_number';
+--
+-- -- Insert a row without a code and check it lands in 0..999999, then clean up:
+-- insert into public.karaoke_search_cache (search_query, video_id, video_title)
+-- values ('random-number-check', 'abcdefghijk', 'DELETE ME') returning song_number;
+-- delete from public.karaoke_search_cache where search_query = 'random-number-check';
 --
 -- -- Should point to (or past) the highest id; if not, re-run section 1.
 -- select last_value from pg_sequences
