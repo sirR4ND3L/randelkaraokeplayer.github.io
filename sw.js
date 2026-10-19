@@ -1,6 +1,6 @@
-// v5: song codes are random 000000-999999 and render zero-padded, so the
-// cached remote shell is refreshed once on upgrade.
-const CACHE_NAME = 'rk-remote-v5';
+// v6: Number Search is a six-slot karaoke display (idle 000000, digits enter
+// from the right), so the cached remote shell is refreshed once on upgrade.
+const CACHE_NAME = 'rk-remote-v6';
 const CORE_ASSETS = [
     'remote.html',
     'manifest.json',

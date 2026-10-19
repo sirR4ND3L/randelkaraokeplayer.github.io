@@ -210,6 +210,20 @@
 
         .search-input-wrapper input::placeholder { color: var(--text-tertiary); }
 
+        /* Number Search behaves like a six-slot karaoke display: the value is
+           always padded (225 -> 000225), so tabular digits, a bright 000000
+           idle placeholder and right alignment read like a machine display. */
+        .search-input-wrapper input.number-mode {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            letter-spacing: 0.14em;
+            font-weight: 600;
+            text-align: right;
+        }
+        .search-input-wrapper input.number-mode::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.85;
+        }
+
         .search-input-wrapper input:focus {
             outline: none;
             background: var(--glass-lighter);
@@ -910,7 +924,7 @@
                     <p class="card-label">Song Number</p>
                     <button id="padSoundBtn" class="toggle-btn" type="button" onclick="togglePadSound()" aria-pressed="true">🔊 Sound</button>
                 </div>
-                <div id="padPreview" class="pad-preview hint-state" aria-live="polite">Enter a 6-digit song number</div>
+                <div id="padPreview" class="pad-preview hint-state" aria-live="polite">Enter a song number (000000–999999)</div>
                 <div class="pad-grid" role="group" aria-label="Number keypad">
                     <button class="pad-key" type="button" onclick="pressPadKey('1')" aria-label="1">1</button>
                     <button class="pad-key" type="button" onclick="pressPadKey('2')" aria-label="2">2</button>
@@ -1044,6 +1058,9 @@
 
         // --- UI state ---
         let quickMode = 'text';                       // 'text' | 'number'
+        // Digits typed in Number Search, before zero-padding. Empty means the
+        // field shows the 000000 idle placeholder. 225 renders as 000225.
+        let padDigits = '';
         let padSoundOn = readPref('rk_remote_pad_sound', true);
         let songbookOpen = readPref('rk_remote_songbook', true);
         let padAudioPool = null;
@@ -1417,6 +1434,8 @@
 
             // Re-renders the list and picks the right empty-state copy.
             applyFilter();
+            // A code typed while the songbook was loading now gets its preview.
+            updatePadPreview();
         }
 
         function buildSongIndex() {
@@ -1549,30 +1568,50 @@
             toggle.setAttribute('aria-pressed', String(isNumber));
             toggle.innerText = isNumber ? 'Text Search' : 'Number Search';
 
+            // tel + inputmode numeric opens the digit keypad on phones while
+            // still preserving leading zeros (type="number" strips them).
+            input.type = isNumber ? 'tel' : 'text';
             input.setAttribute('inputmode', isNumber ? 'numeric' : 'text');
             input.setAttribute('pattern', isNumber ? '[0-9]*' : '');
-            input.placeholder = isNumber ? 'Enter song number…' : 'Search the title songs...';
+            input.classList.toggle('number-mode', isNumber);
+            input.placeholder = isNumber ? '000000' : 'Search the title songs...';
             input.setAttribute('aria-label', isNumber ? 'Songbook number' : 'Quick song search');
 
             el('numberPad').classList.toggle('hidden', !isNumber);
             el('quickHint').innerText = isNumber
-                ? 'Tap the keypad to enter the 6-digit song number (000000–999999).'
+                ? 'Tap the keypad — digits fill in from the right (000000–999999).'
                 : 'Not in the songbook? Search by title/artist for best results.';
 
-            input.value = '';
+            padDigits = '';
+            renderPadInput();
             updatePadPreview();
         }
 
+        // Digits only, keeping the last six: a seventh keypress shifts the
+        // oldest digit off the left, like a karaoke machine display.
         function sanitizeNumberInput(raw) {
-            return String(raw || '').replace(/\D/g, '').slice(0, CONFIG.MAX_CODE_LENGTH);
+            return String(raw || '').replace(/\D/g, '').slice(-CONFIG.MAX_CODE_LENGTH);
+        }
+
+        // The six-slot display value: 225 -> "000225". Empty stays empty so
+        // the 000000 placeholder is shown, not a real code.
+        function currentNumberCode() {
+            return padDigits ? padDigits.padStart(CONFIG.MAX_CODE_LENGTH, '0') : '';
+        }
+
+        function renderPadInput() {
+            const input = el('quickSearchInput');
+            input.value = currentNumberCode();
         }
 
         // Physical and paste input still has to stay numeric in number mode.
+        // Re-deriving the digits from the visible value also makes Backspace
+        // behave like the machine display (000225 -> 000022).
         function onQuickInput() {
             if (quickMode !== 'number') return;
             const input = el('quickSearchInput');
-            const clean = sanitizeNumberInput(input.value);
-            if (clean !== input.value) input.value = clean;
+            padDigits = sanitizeNumberInput(input.value);
+            renderPadInput();
             updatePadPreview();
         }
 
@@ -1584,11 +1623,11 @@
         function updatePadPreview() {
             const box = el('padPreview');
             if (!box) return;
-            const code = sanitizeNumberInput(el('quickSearchInput').value);
+            const code = currentNumberCode();
 
             if (!code) {
                 box.className = 'pad-preview hint-state';
-                box.innerText = 'Enter a 6-digit song number';
+                box.innerText = 'Enter a song number (000000–999999)';
                 return;
             }
 
@@ -1602,14 +1641,9 @@
             }
 
             box.className = 'pad-preview hint-state';
-            if (code.length < CONFIG.MAX_CODE_LENGTH) {
-                // Song numbers are 6 digits; a shorter prefix cannot exist.
-                box.innerText = 'Keep typing — song numbers are ' + CONFIG.MAX_CODE_LENGTH + ' digits (000000–999999).';
-            } else {
-                box.innerText = songbookLoading
-                    ? 'Songbook is still loading…'
-                    : '#' + code + ' is not in the songbook — it will still be sent.';
-            }
+            box.innerText = songbookLoading
+                ? 'Songbook is still loading…'
+                : '#' + code + ' is not in the songbook — it will still be sent.';
         }
 
         // ---------------------------------------------------------------
@@ -1655,10 +1689,10 @@
         }
 
         function pressPadKey(digit) {
-            const input = el('quickSearchInput');
-            const next = sanitizeNumberInput(input.value + digit);
-            if (next === input.value) return;      // hit the length cap
-            input.value = next;
+            // Right-to-left entry: each digit shifts the code one slot left,
+            // then the zero padding fills the empty slots.
+            padDigits = (padDigits + digit).slice(-CONFIG.MAX_CODE_LENGTH);
+            renderPadInput();
             playDigitSound(digit);
             vibrate(HAPTICS.pad);
             releasePadFocus();
@@ -1666,15 +1700,16 @@
         }
 
         function padBackspace() {
-            const input = el('quickSearchInput');
-            input.value = input.value.slice(0, -1);
+            padDigits = padDigits.slice(0, -1);
+            renderPadInput();
             vibrate(HAPTICS.pad);
             releasePadFocus();
             updatePadPreview();
         }
 
         function padClear() {
-            el('quickSearchInput').value = '';
+            padDigits = '';
+            renderPadInput();
             vibrate(HAPTICS.pad);
             releasePadFocus();
             updatePadPreview();
@@ -1800,16 +1835,9 @@
         // playSongByNumber(), so the remote never has to resolve it itself.
         // The local lookup only feeds the preview.
         async function quickNumber(playNow) {
-            const input = el('quickSearchInput');
-            const code = sanitizeNumberInput(input.value);
+            const code = currentNumberCode();
             if (!code) {
                 showToast('Enter a song number', 'error', 'Tap the keypad below.');
-                return;
-            }
-            // Song numbers are 6 digits. A shorter value is only allowed when it
-            // matches a loaded row (pre-migration ids or a partial songbook).
-            if (code.length < CONFIG.MAX_CODE_LENGTH && !resolveSongByCode(code)) {
-                showToast('Enter all ' + CONFIG.MAX_CODE_LENGTH + ' digits', 'error', 'Song numbers are 6 digits long.');
                 return;
             }
 
@@ -1821,7 +1849,8 @@
                 videoTitle: song ? (song.title + ' - ' + song.artist) : ('Songbook #' + code)
             }, btn);
 
-            input.value = '';
+            padDigits = '';
+            renderPadInput();
             updatePadPreview();
         }
 
