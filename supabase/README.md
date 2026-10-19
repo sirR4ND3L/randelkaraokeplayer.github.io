@@ -18,6 +18,9 @@ What it does:
 - adds `karaoke_search_cache.source`,
 - creates `admin_users` + `is_admin()` and replaces the legacy anon write
   policies with admin-only write policies (reads stay public),
+- resyncs the internal `id` primary-key sequence when it lags behind the
+  table (explicit seed ids otherwise make new inserts fail with
+  `duplicate key value violates unique constraint "karaoke_search_cache_pkey"`),
 - adds cleanup indexes, `remote_commands.created_at`, and the
   `cleanup_presence_and_commands()` function used by manage.html.
 

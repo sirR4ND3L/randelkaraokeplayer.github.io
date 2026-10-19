@@ -60,7 +60,10 @@ Expected:
   `songbook_admin_insert`, `songbook_admin_update`, `songbook_admin_delete`
 
 > Safe to re-run. Run while nobody is adding songs (the `NOT NULL` step assumes
-> the backfill above it completed).
+> the backfill above it completed). If you ran this migration before the
+> "internal id sequence resync" block was added, re-run the whole file (or just
+> that `do $$ ... $$;` block) — inserts otherwise fail with a `karaoke_search_cache_pkey`
+> duplicate-key error.
 
 ### ☐ Step 2 — Create the admin account
 
@@ -145,6 +148,7 @@ new numbers.
 
 | Symptom | Cause / fix |
 |---|---|
+| New songs fail with `500` and the log says `duplicate key value violates unique constraint "karaoke_search_cache_pkey"` | The internal `id` sequence lags behind the table (rows were seeded with explicit ids). Re-run the migration — its "internal id sequence resync" block runs `setval` to `max(id)`. |
 | Login succeeds but page stays guest mode | `admin_users` table missing or the UID is not inserted (Step 2). The status line says "admin access is not set up yet". |
 | Guest add fails with an RLS error | The backend is not deployed yet or `/api/public-songs` is unreachable. Deploy Step 3, or temporarily keep the old anon policies (not recommended). |
 | `?number=100123` returns 404 | Migration not run, or no row has that number. Check the VERIFY queries. |

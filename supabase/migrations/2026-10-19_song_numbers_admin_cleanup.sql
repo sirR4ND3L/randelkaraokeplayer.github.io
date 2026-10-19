@@ -84,6 +84,32 @@ alter table public.karaoke_search_cache
 alter sequence public.karaoke_song_number_seq
   owned by public.karaoke_search_cache.song_number;
 
+-- The internal id PK (karaoke_search_cache.id) can fall behind the table when
+-- rows were ever seeded with explicit ids. New inserts then fail with
+--   duplicate key value violates unique constraint "karaoke_search_cache_pkey"
+-- until the sequence catches up. Resync it to the current max id so the very
+-- next insert gets a free value.
+do $$
+declare
+  seq_name text;
+  max_id bigint;
+begin
+  seq_name := pg_get_serial_sequence('public.karaoke_search_cache', 'id');
+  if seq_name is null then
+    select substring(column_default from 'nextval\(''([^'']+)''')
+      into seq_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'karaoke_search_cache'
+        and column_name = 'id';
+  end if;
+
+  if seq_name is not null then
+    select coalesce(max(id), 1) into max_id from public.karaoke_search_cache;
+    perform setval(seq_name::regclass, max_id);
+  end if;
+end $$;
+
 
 -- ----------------------------------------------------------------------------
 -- 2. SOURCE COLUMN (who added the song)
@@ -243,6 +269,10 @@ grant execute on function public.cleanup_presence_and_commands() to authenticate
 --   from public.karaoke_search_cache;
 --
 -- select last_value, is_called from public.karaoke_song_number_seq;
+--
+-- -- Should point to (or past) the highest id; if not, re-run section 1.
+-- select last_value from pg_sequences
+--  where schemaname = 'public' and sequencename = 'karaoke_search_cache_id_seq';
 --
 -- select policyname, cmd, roles
 --   from pg_policies
