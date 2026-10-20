@@ -1,0 +1,9 @@
+# Normalize text files to LF in the repository and in the working tree.
+# Without this, an editor or checkout using Windows line endings rewrites
+# whole files as CRLF and every line shows up as changed in git.
+* text=auto eol=lf
+
+# Binary assets: never diff, merge, or convert these.
+*.mp3 binary
+*.mp4 binary
+*.png binary
