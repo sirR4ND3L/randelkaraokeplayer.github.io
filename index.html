@@ -42,7 +42,7 @@
     <!-- ?v= cache-buster: bump this number whenever style.css changes, otherwise a
          browser (or GitHub Pages) keeps serving the old stylesheet and silently
          ignores layout fixes. Keep it in step with the ?v on app.js below. -->
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=12">
     <link rel="manifest" href="manifest-player.json">
     <meta name="theme-color" content="#030303">
     <!-- RawGit was sunset and only works because it redirects to jsDelivr;
@@ -134,11 +134,8 @@
                 <video id="bgvPlayer" muted loop playsinline autoplay preload="auto"
                     aria-hidden="true" tabindex="-1" disablepictureinpicture></video>
 
-                <!-- Stage overlays. z-index 10 keeps them above the player surface
-                     (z-index 1) and the placeholder (2), but below the score overlay
-                     (100) and the play gate (90), so the score screen stays clean. -->
-                <!-- Dynamic island: now a top-center overlay inside the full-screen
-                     stage. z-index 120 keeps it above the score overlay (100) so the
+                <!-- Dynamic island: top-center overlay inside the full-screen stage.
+                     z-index 120 keeps it above the score overlay (100) so the
                      now-playing title stays readable during the results screen. -->
                 <div class="header-container">
                     <div id="dynamicIsland" class="dynamic-island">
@@ -152,7 +149,30 @@
                     </div>
                 </div>
 
-                <div id="queueOverlay" class="stage-overlay stage-overlay--tl glass-panel">
+                <!-- Embedded songbook, top-left of the stage. The songs render
+                     here, and the 🎵 button in the transport strip (#openSBBtn)
+                     toggles the panel instead of opening a separate tab. -->
+                <div class="stage-left-rail">
+                    <section id="songbookPanel" class="songbook-panel is-open" aria-label="Songbook">
+                        <div class="songbook-panel-head">
+                            <span class="songbook-panel-title">
+                                <span aria-hidden="true">🎵</span> Songbook
+                                <span id="songbookCount" class="songbook-count" aria-live="polite">0</span>
+                            </span>
+                            <button id="songbookCloseBtn" class="songbook-panel-close" type="button"
+                                aria-label="Hide songbook" title="Hide songbook">✕</button>
+                        </div>
+                        <input id="songbookFilter" class="songbook-panel-filter" type="text"
+                            placeholder="🔍 Search title, artist or number..."
+                            aria-label="Filter the songbook" autocomplete="off" autocorrect="off"
+                            autocapitalize="none" spellcheck="false">
+                        <p id="songbookStatus" class="songbook-panel-status">Loading songs…</p>
+                        <div id="songbookList" class="songbook-panel-list" role="list"></div>
+                    </section>
+                </div>
+
+                <!-- Queue, bottom-left corner. -->
+                <div id="queueOverlay" class="stage-overlay stage-overlay--bl glass-panel">
                     <div class="queue-head">
                         <span class="queue-head-label">Up Next</span>
                         <span id="queueCountBadge" class="queue-count-badge" aria-live="polite">0</span>
@@ -164,7 +184,8 @@
                     </div>
                 </div>
 
-                <div id="qrOverlay" class="stage-overlay stage-overlay--bl glass-panel">
+                <!-- Remote-control QR, bottom-right corner. -->
+                <div id="qrOverlay" class="stage-overlay stage-overlay--br glass-panel">
                     <div class="qr-head">
                         <span class="qr-label">Scan to control</span>
                         <!-- Still the click-to-copy badge: same id, so
@@ -226,7 +247,7 @@
                     <button id="qrToggleBtn" class="stage-btn" onclick="toggleQR()" aria-label="Show or hide the QR code" aria-keyshortcuts="Q" aria-pressed="true" aria-controls="qrOverlay">
                         <span class="icon" aria-hidden="true">📱</span>
                     </button>
-                    <button id="openSBBtn" class="stage-btn" onclick="openSongBook()" aria-label="Open Songbook">
+                    <button id="openSBBtn" class="stage-btn" onclick="openSongBook()" aria-label="Show or hide the songbook" aria-pressed="true" aria-controls="songbookPanel">
                         <span class="icon" aria-hidden="true">🎵</span>
                     </button>
                 </div>
@@ -235,6 +256,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=11" defer></script>
+    <script src="app.js?v=12" defer></script>
 </body>
 </html>

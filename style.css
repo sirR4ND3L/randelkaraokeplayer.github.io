@@ -30,9 +30,16 @@
     --qr-pad: 10px;
     --queue-chip-size: 30px;
     --overlay-gap: 14px;
+    --overlay-bottom: var(--overlay-gap);
+    /* The QR can need a different bottom offset in narrow landscape windows,
+       where it is lifted above the transport bar while the queue stays low. */
+    --overlay-bottom-qr: var(--overlay-bottom);
     --overlay-radius: 16px;
     --overlay-bg: rgba(0, 0, 0, 0.55);
     --overlay-max-w: 46%;
+    /* Wide screens keep the queue clear of the centred transport bar. Portrait
+       media queries replace this with the available overlay width. */
+    --queue-max-w: min(46%, calc(50vw - 170px));
 
     --ctl-size: 38px;
     --ctl-gap: 7px;
@@ -637,10 +644,290 @@ input[type=range] {
 }
 
 /* =========================================================================
-   STAGE OVERLAYS — queue (top-left) and QR (bottom-left), inside the video.
-   z-index 10 sits above the player surface (1) and the placeholder (2), but
-   below the play gate (90) and the score overlay (100), so the score screen
-   is never contaminated by queue chips.
+   LEFT RAIL — embedded songbook (top-left).
+   The songbook is part of the player now: it renders verified songs in-page,
+   and the 🎵 button in the control strip (#openSBBtn) toggles this panel
+   instead of opening songbook.html in a separate tab.
+   ========================================================================= */
+.stage-left-rail {
+    position: absolute;
+    z-index: 10;
+    top: var(--overlay-gap);
+    left: var(--overlay-gap);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: min(340px, calc(100vw - (2 * var(--overlay-gap))));
+}
+
+/* The panel itself. It is capped so it never reaches the queue in the
+   bottom-left corner, and its song list scrolls independently. */
+.songbook-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 46vh;
+    max-height: min(46vh, 420px);
+    background: var(--overlay-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--overlay-radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    touch-action: manipulation;
+    transition: var(--transition-fast);
+}
+
+.songbook-panel:not(.is-open) {
+    display: none;
+}
+
+.songbook-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 10px 8px 12px;
+}
+
+.songbook-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.songbook-count {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--accent-color);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.songbook-panel-close {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1;
+}
+
+.songbook-panel-close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    transform: none;
+}
+
+.songbook-panel-filter {
+    margin: 0 10px 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.3;
+    outline: none;
+}
+
+.songbook-panel-filter::placeholder { color: var(--text-tertiary); }
+.songbook-panel-filter:focus { border-color: rgba(0, 122, 255, 0.65); }
+
+.songbook-panel-status {
+    margin: 0;
+    padding: 0 12px 8px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.songbook-panel-status[hidden] { display: none; }
+
+.songbook-panel-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 6px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.songbook-panel-list::-webkit-scrollbar { display: block; width: 4px; }
+.songbook-panel-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.songbook-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 6px;
+    border-radius: 9px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.songbook-row:last-child { border-bottom: 0; }
+.songbook-row:hover { background: rgba(255, 255, 255, 0.06); }
+.songbook-row[hidden] { display: none; }
+
+.songbook-row-num {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    color: #6db6ff;
+    font-variant-numeric: tabular-nums;
+}
+
+.songbook-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.songbook-row-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.songbook-row-artist {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Play / reserve shortcuts. Hidden until the row is hovered on pointer
+   devices; always visible on touch, where there is no hover. */
+.songbook-row-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.songbook-row:hover .songbook-row-actions,
+.songbook-row:focus-within .songbook-row-actions {
+    opacity: 1;
+}
+
+.songbook-row-action {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--text-primary);
+    font-size: 10px;
+    line-height: 1;
+}
+
+.songbook-row-action:hover {
+    background: rgba(0, 122, 255, 0.3);
+    border-color: var(--accent-color);
+    transform: scale(1.06);
+}
+
+.songbook-row-action:disabled {
+    opacity: 0.45;
+    cursor: wait;
+}
+
+@media (hover: none) {
+    .songbook-row-actions { opacity: 1; }
+}
+
+/* The pill would sit under a notch/status bar without this. */
+@supports (padding: max(0px)) {
+    .stage-left-rail {
+        top: max(var(--overlay-gap), env(safe-area-inset-top, 0px));
+        left: max(var(--overlay-gap), env(safe-area-inset-left, 0px));
+    }
+}
+
+/* Narrow/tablet widths: drop the rail below the centred dynamic island so the
+   two never overlap, and let the list use the full width on phones. */
+@media (max-width: 860px) {
+    .stage-left-rail {
+        top: calc(var(--overlay-gap) + 48px);
+    }
+}
+
+@supports (padding: max(0px)) {
+    @media (max-width: 860px) {
+        .stage-left-rail {
+            top: calc(max(var(--overlay-gap), env(safe-area-inset-top, 0px)) + 48px);
+        }
+    }
+}
+
+@media (max-width: 600px) {
+    .stage-left-rail {
+        width: calc(100vw - (2 * var(--overlay-gap)));
+    }
+    .songbook-panel {
+        max-height: 40vh;
+        max-height: min(40vh, 360px);
+    }
+    /* 16px avoids the automatic zoom iOS applies to smaller form fields. */
+    .songbook-panel-filter { font-size: 16px; padding: 7px 10px; }
+}
+
+/* Short portrait viewports (split-screen or a phone with a tall browser UI):
+   cap the songbook so it cannot reach the raised QR plate. */
+@media (max-height: 560px) and (orientation: portrait) {
+    .songbook-panel { max-height: 30vh; }
+}
+
+/* Landscape phones have almost no vertical room; keep the songbook narrow and
+   short so the queue in the bottom-left corner still has room beneath it. */
+@media (max-height: 600px) and (orientation: landscape) {
+    .songbook-panel {
+        width: min(320px, 52vw);
+        max-height: 34vh;
+    }
+    /* Tighten the chrome so more than one song row is visible. */
+    .songbook-panel-head { padding: 6px 8px 4px 10px; }
+    .songbook-panel-filter { margin: 0 8px 6px; padding: 5px 8px; font-size: 11px; }
+}
+
+/* =========================================================================
+   STAGE OVERLAYS — queue (bottom-left) and QR (bottom-right), inside the
+   video. z-index 10 sits above the player surface (1) and the placeholder (2),
+   but below the play gate (90) and the score overlay (100), so the score
+   screen is never contaminated by queue chips.
    ========================================================================= */
 .stage-overlay {
     position: absolute;
@@ -674,16 +961,44 @@ input[type=range] {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-.stage-overlay--tl {
-    top: var(--overlay-gap);
+/* Bottom-left: the queue strip. On wide screens leave room for the centred
+   transport bar; narrower layouts lift it above the bar (see below). */
+.stage-overlay--bl {
+    bottom: var(--overlay-bottom);
     left: var(--overlay-gap);
-    max-width: var(--overlay-max-w);
+    /* Stretch the strip/next row to the panel width so a long queue scrolls
+       inside its own glass plate instead of spilling under the controls or QR. */
+    align-items: stretch;
+    max-width: var(--queue-max-w);
 }
 
-.stage-overlay--bl {
-    bottom: var(--overlay-gap);
-    left: var(--overlay-gap);
-    align-items: flex-start;
+/* Bottom-right: the remote-control QR plate. */
+.stage-overlay--br {
+    bottom: var(--overlay-bottom-qr);
+    right: var(--overlay-gap);
+    align-items: flex-end;
+}
+
+/* Portrait screens cannot fit the queue and QR beside the centred transport
+   bar, so lift both above it. The offsets leave the bar's height plus a gap. */
+@media (max-width: 900px) and (orientation: portrait) {
+    :root {
+        --overlay-bottom: 80px;
+        --queue-max-w: var(--overlay-max-w);
+    }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+    :root {
+        --overlay-bottom: 96px;
+        --queue-max-w: 42vw;
+    }
+}
+
+/* In narrow landscape windows the QR is wider than the space between the
+   transport bar and the right edge, so lift just the QR above the bar. */
+@media (max-height: 600px) and (orientation: landscape) and (max-width: 660px) {
+    :root { --overlay-bottom-qr: 90px; }
 }
 
 /* Transport controls: bottom-center INSIDE the stage. */
@@ -782,6 +1097,13 @@ input[type=range] {
 }
 
 .stage-btn.active .stage-btn-dot { display: block; }
+
+/* Songbook toggle reflects whether the embedded panel is open. */
+#openSBBtn[aria-pressed="true"] {
+    background: rgba(0, 122, 255, 0.24);
+    border-color: rgba(0, 122, 255, 0.55);
+    box-shadow: 0 0 12px rgba(0, 122, 255, 0.22);
+}
 
 /* QR overlay hidden state. */
 .stage-overlay.is-hidden {
@@ -936,7 +1258,9 @@ input[type=range] {
     font-size: 10px;
     font-style: normal;
     color: var(--text-tertiary);
-    white-space: nowrap;
+    /* The bottom-left panel can be narrow on phones; wrap instead of letting
+       the message spill out of the glass plate. */
+    white-space: normal;
 }
 
 /* QR overlay. The player ID sits beside the label, mirroring the
@@ -1725,10 +2049,18 @@ body.admin-page .admin-maintenance button { margin: 10px 0; }
         --qr-pad: 5px;
         --queue-chip-size: 22px;
     }
+    /* The QR caption is wider than the code itself. Wrap it to the plate's
+       width so the bottom-right plate cannot collide with the queue on a
+       320px-wide screen. */
+    .qr-head {
+        width: calc(var(--qr-size) + (2 * var(--qr-pad)));
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
 }
 
-/* Landscape phones have almost no vertical room, so the overlays are capped as a
-   share of viewport height and the QR shrinks first. */
+/* Landscape phones have almost no vertical room, so the bottom overlays size
+   to their content and the QR shrinks first. */
 @media (max-height: 600px) and (orientation: landscape) {
     :root {
         --qr-size: 96px;
@@ -1737,8 +2069,11 @@ body.admin-page .admin-maintenance button { margin: 10px 0; }
         --overlay-gap: 8px;
         --overlay-max-w: 40%;
     }
-    .stage-overlay {
-        max-height: 25vh;
+    /* Bottom overlays are positioned independently, so they can size to their
+       content instead of being clipped by a viewport-height cap. */
+    .stage-overlay--bl,
+    .stage-overlay--br {
+        max-height: none;
     }
     .queue-strip {
         flex-wrap: nowrap;
@@ -1749,13 +2084,20 @@ body.admin-page .admin-maintenance button { margin: 10px 0; }
    env() carries an explicit fallback so these declarations stay valid even in a
    browser that parses env() but not the inset variables. */
 @supports (padding: max(0px)) {
-    .stage-overlay--tl {
-        top: max(var(--overlay-gap), env(safe-area-inset-top, 0px));
-        left: max(var(--overlay-gap), env(safe-area-inset-left, 0px));
+    /* A landscape notch eats into the queue's usable width as well as its
+       position; shrink the cap by the inset so the controls stay clear. */
+    @media (orientation: landscape) {
+        :root {
+            --queue-max-w: min(46%, calc(50vw - 170px - env(safe-area-inset-left, 0px)));
+        }
     }
     .stage-overlay--bl {
-        bottom: max(var(--overlay-gap), env(safe-area-inset-bottom, 0px));
+        bottom: max(var(--overlay-bottom), env(safe-area-inset-bottom, 0px));
         left: max(var(--overlay-gap), env(safe-area-inset-left, 0px));
+    }
+    .stage-overlay--br {
+        bottom: max(var(--overlay-bottom-qr), env(safe-area-inset-bottom, 0px));
+        right: max(var(--overlay-gap), env(safe-area-inset-right, 0px));
     }
 }
 

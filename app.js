@@ -111,7 +111,13 @@ SCORING: {
         nowPlayingTitle: null,
         heartbeatBusy: false,
         heartbeatDebounce: null,
-        heartbeatHasNowPlaying: null
+        heartbeatHasNowPlaying: null,
+        // Embedded songbook panel (top-left of the stage)
+        songbookSongs: [],
+        songbookClient: null,
+        songbookRefreshTimer: null,
+        songbookStatusTimer: null,
+        songbookLive: false
     },
 
     // --- 3. Cached DOM Elements ---
@@ -135,6 +141,7 @@ SCORING: {
         this.restoreQRState();
         this.initSongbookBridge();
         this.initRemoteControl();
+        this.initSongbookPanel();
     },
 
     // Fetches and injects modular UI components like the custom alert.
@@ -159,7 +166,9 @@ SCORING: {
             'finalRank', 'finalMessage', 'micPulseIndicator',
             'qrOverlay', 'qrStage', 'qrToggleBtn', 'playPauseBtn', 'playerIdBadge',
             'queueOverlay', 'queueNextTitle', 'queueNextRow', 'queueCountBadge',
-            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer', 'playGate', 'playGateReason'
+            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer', 'playGate', 'playGateReason',
+            'songbookPanel', 'songbookList', 'songbookFilter', 'songbookStatus',
+            'songbookCount', 'songbookCloseBtn', 'openSBBtn'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
     },
@@ -1111,8 +1120,11 @@ SCORING: {
         return true;
     },
 
+    // Toggles the in-page songbook panel. The standalone songbook.html page
+    // still exists for printing/sharing, but the control-strip button no longer
+    // opens a separate tab.
     openSongBook() {
-        window.open('songbook.html?player=' + encodeURIComponent(this.getPlayerId()), '_blank');
+        this.toggleSongbook();
     },
 
     // Returns this tab's unique, persistent player instance ID.
@@ -1175,6 +1187,246 @@ SCORING: {
             const playNow = msg.action === 'play';
             await this.playSongByNumber(msg.code, playNow);
         };
+    },
+
+    // --- Embedded songbook panel (top-left) ---
+    // Renders the same verified songs as songbook.html, but in-page. The host
+    // can filter the list and play/reserve a song without leaving the player.
+
+    initSongbookPanel() {
+        const panel = this.elements.songbookPanel;
+        if (!panel) return;
+
+        const { songbookFilter, songbookList, songbookCloseBtn } = this.elements;
+        if (songbookFilter) {
+            songbookFilter.addEventListener('input', () => this.filterSongbook(songbookFilter.value));
+        }
+        if (songbookList) {
+            songbookList.addEventListener('click', (event) => this.handleSongbookListClick(event));
+        }
+        if (songbookCloseBtn) {
+            songbookCloseBtn.addEventListener('click', () => this.toggleSongbook(false));
+        }
+
+        // Match the QR overlay: the host's show/hide choice survives a reload.
+        let saved = null;
+        try { saved = localStorage.getItem('rk_songbook_visible'); } catch (e) { /* private mode */ }
+        this.toggleSongbook(saved === null ? true : saved === '1');
+
+        // Do not block startup on the network; the panel shows its loading
+        // state and fills in when the query returns.
+        this.loadSongbook();
+    },
+
+    // Shows/hides the panel. Called by the 🎵 control-strip button, the panel's
+    // own ✕, and initSongbookPanel (restoring the saved state).
+    toggleSongbook(force) {
+        const panel = this.elements.songbookPanel;
+        if (!panel) return;
+        const show = typeof force === 'boolean'
+            ? force
+            : !panel.classList.contains('is-open');
+        panel.classList.toggle('is-open', show);
+
+        const btn = this.elements.openSBBtn;
+        if (btn) {
+            btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+            btn.setAttribute('aria-label', show ? 'Hide the songbook' : 'Show the songbook');
+        }
+        try { localStorage.setItem('rk_songbook_visible', show ? '1' : '0'); } catch (e) { /* private mode */ }
+    },
+
+    // Reuses the Supabase client opened for remote control when possible, so
+    // the page never runs two realtime connections to the same project.
+    getSongbookClient() {
+        if (this.state.songbookClient) return this.state.songbookClient;
+        if (this.state.supabaseClient) {
+            this.state.songbookClient = this.state.supabaseClient;
+            return this.state.songbookClient;
+        }
+        if (typeof supabase === 'undefined') return null;
+        try {
+            this.state.songbookClient = supabase.createClient(this.CONFIG.SUPABASE_URL, this.CONFIG.SUPABASE_ANON_KEY);
+            return this.state.songbookClient;
+        } catch (err) {
+            console.warn("Songbook unavailable:", err.message);
+            return null;
+        }
+    },
+
+    async loadSongbook() {
+        const list = this.elements.songbookList;
+        if (!list) return;
+
+        const client = this.getSongbookClient();
+        if (!client) {
+            this.setSongbookStatus('Songbook unavailable right now.');
+            return;
+        }
+
+        if (this.state.songbookSongs.length === 0) {
+            this.setSongbookStatus('Loading songs…');
+        }
+
+        try {
+            // select() = all columns so the panel keeps working before and after
+            // the song_number migration; id is the fallback for older rows.
+            const { data, error } = await client
+                .from('karaoke_search_cache')
+                .select()
+                .eq('is_verified', true)
+                .order('video_title', { ascending: true });
+            if (error) throw error;
+
+            // Titles/artists are untrusted database text. renderSongbook() builds
+            // every node with textContent, so nothing here can inject markup.
+            this.state.songbookSongs = (data || []).map((song) => {
+                const parts = String(song.video_title || '').split(' - ');
+                return {
+                    code: formatSongNumber(song.song_number != null ? song.song_number : song.id),
+                    title: parts[0] || 'Untitled',
+                    artist: parts.slice(1).join(' - ') || 'N/A'
+                };
+            });
+
+            this.renderSongbook();
+            const filter = this.elements.songbookFilter;
+            this.filterSongbook(filter ? filter.value : '');
+            this.subscribeSongbookLive(client);
+        } catch (err) {
+            console.error("Songbook load error:", err);
+            this.setSongbookStatus('Could not load the songbook.');
+        }
+    },
+
+    // Live-refresh when a song is verified/edited from manage.html, matching the
+    // standalone songbook page. Debounced so a bulk import triggers one re-read.
+    subscribeSongbookLive(client) {
+        if (this.state.songbookLive) return;
+        this.state.songbookLive = true;
+        client
+            .channel('songbook-panel-live')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'karaoke_search_cache' },
+                () => {
+                    clearTimeout(this.state.songbookRefreshTimer);
+                    this.state.songbookRefreshTimer = setTimeout(() => this.loadSongbook(), 500);
+                }
+            )
+            .subscribe();
+    },
+
+    renderSongbook() {
+        const list = this.elements.songbookList;
+        if (!list) return;
+        list.textContent = '';
+
+        const fragment = document.createDocumentFragment();
+        this.state.songbookSongs.forEach((song) => {
+            const row = document.createElement('div');
+            row.className = 'songbook-row';
+            row.setAttribute('role', 'listitem');
+            row.dataset.code = song.code;
+            row.dataset.search = `${song.code} ${song.title} ${song.artist}`.toLowerCase();
+
+            const number = document.createElement('span');
+            number.className = 'songbook-row-num';
+            number.textContent = song.code;
+
+            const text = document.createElement('span');
+            text.className = 'songbook-row-text';
+
+            const title = document.createElement('span');
+            title.className = 'songbook-row-title';
+            title.textContent = song.title;
+            title.title = song.title;
+
+            const artist = document.createElement('span');
+            artist.className = 'songbook-row-artist';
+            artist.textContent = song.artist;
+            artist.title = song.artist;
+
+            text.append(title, artist);
+
+            const actions = document.createElement('span');
+            actions.className = 'songbook-row-actions';
+            actions.append(
+                this.makeSongbookAction('play', '▶', `Play ${song.title} now`),
+                this.makeSongbookAction('reserve', '＋', `Reserve ${song.title}`)
+            );
+
+            row.append(number, text, actions);
+            fragment.appendChild(row);
+        });
+        list.appendChild(fragment);
+
+        const count = this.elements.songbookCount;
+        if (count) count.textContent = String(this.state.songbookSongs.length);
+    },
+
+    makeSongbookAction(action, glyph, label) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'songbook-row-action';
+        button.dataset.songbookAction = action;
+        button.textContent = glyph;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        return button;
+    },
+
+    filterSongbook(value) {
+        const list = this.elements.songbookList;
+        if (!list) return;
+
+        const query = String(value || '').trim().toLowerCase();
+        let visible = 0;
+        Array.from(list.children).forEach((row) => {
+            const match = !query || (row.dataset.search || '').includes(query);
+            row.hidden = !match;
+            if (match) visible += 1;
+        });
+
+        // Keep loading/error messages intact until the first successful load.
+        if (!this.state.songbookSongs.length) return;
+        if (query && visible === 0) {
+            this.setSongbookStatus('No songs match that search.');
+        } else {
+            this.setSongbookStatus('');
+        }
+    },
+
+    handleSongbookListClick(event) {
+        const button = event.target.closest('[data-songbook-action]');
+        if (!button) return;
+        const row = button.closest('.songbook-row');
+        if (!row || !row.dataset.code) return;
+
+        const playNow = button.dataset.songbookAction === 'play';
+        button.disabled = true;
+        this.runSongbookAction(row.dataset.code, playNow)
+            .finally(() => { button.disabled = false; });
+    },
+
+    async runSongbookAction(code, playNow) {
+        const ok = await this.playSongByNumber(code, playNow);
+        if (!ok) return;
+
+        this.setSongbookStatus(playNow
+            ? `Playing #${code}…`
+            : `#${code} added to the queue.`);
+        clearTimeout(this.state.songbookStatusTimer);
+        this.state.songbookStatusTimer = setTimeout(() => {
+            const filter = this.elements.songbookFilter;
+            this.filterSongbook(filter ? filter.value : '');
+        }, 2500);
+    },
+
+    setSongbookStatus(text) {
+        const status = this.elements.songbookStatus;
+        if (!status) return;
+        status.textContent = text || '';
+        status.hidden = !text;
     },
 
     // Connects this player to the remote-control channel used by the phone
@@ -1414,6 +1666,14 @@ SCORING: {
                 event.preventDefault(); // Stop Enter from triggering search underneath
             }
             return; // Block other shortcuts while alert is active
+        }
+
+        // Typing in a form field (e.g. the songbook filter) must never trigger
+        // Z/C/B/M/Q/F shortcuts.
+        const target = event.target;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+            || target.tagName === 'SELECT' || target.isContentEditable)) {
+            return;
         }
 
         // Built from the SHORTCUTS table so the handler and the <kbd> badges on
