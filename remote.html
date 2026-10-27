@@ -1070,6 +1070,8 @@
         let restoreTimers = {};
         let filterTimer = null;
         let skeletonTimer = null;
+        let songbookChannel = null;      // Supabase Realtime subscription
+        let songbookRefreshTimer = null; // debounce for the live refresh
         let holdTimer = null;
         let lastSeenAt = 0;
         let playerNowPlaying = null;    // title of the song on stage, or null when free
@@ -1112,6 +1114,7 @@
             setupPlayerBadge(pid);
             watchPlayerStatus(pid);
             loadSongbook();
+            startSongbookLiveRefresh();
         }
 
         function setupPlayerBadge(pid) {
@@ -1387,18 +1390,47 @@
             nomatch: '(No songs match your filter)'
         };
 
-        async function loadSongbook() {
-            songbookLoading = true;
-            songbookError = false;
-            clearTimeout(skeletonTimer);
-            setEmptyState('loading');
-            // Only flash a skeleton if the fetch is genuinely slow, otherwise it
-            // just flickers on a warm cache.
-            skeletonTimer = setTimeout(() => {
-                if (songbookLoading) showSkeleton();
-            }, 300);
+        // Live songbook refresh — the same Supabase Realtime channel that
+        // songbook.html uses. A bulk import fires one event per row, so the
+        // reload is debounced to a single re-fetch. The re-fetch runs silently so
+        // the list the guest is reading never blinks.
+        function startSongbookLiveRefresh() {
+            if (songbookChannel) return;
+            songbookChannel = supabaseClient
+                .channel('remote-songbook-live-refresh')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'karaoke_search_cache' },
+                    () => {
+                        clearTimeout(songbookRefreshTimer);
+                        songbookRefreshTimer = setTimeout(() => {
+                            console.log('Songbook changed, refreshing remote automatically...');
+                            loadSongbook({ silent: true });
+                        }, 500); // Debounce to one refresh per batch
+                    }
+                )
+                .subscribe();
+        }
+
+        async function loadSongbook(options) {
+            const silent = !!(options && options.silent);
+
+            // A background refresh must never interrupt a load already running.
+            if (silent && songbookLoading) return;
+
+            if (!silent) {
+                songbookLoading = true;
+                songbookError = false;
+                clearTimeout(skeletonTimer);
+                setEmptyState('loading');
+                // Only flash a skeleton if the fetch is genuinely slow, otherwise it
+                // just flickers on a warm cache.
+                skeletonTimer = setTimeout(() => {
+                    if (songbookLoading) showSkeleton();
+                }, 300);
+            }
 
             let failure = null;
+            let songs = null;
             try {
                 // select() = all columns so the page keeps working before and
                 // after the song_number migration (falls back to id below).
@@ -1410,7 +1442,7 @@
 
                 if (error) failure = error;
                 else {
-                    allSongsData = (data || []).map(song => {
+                    songs = (data || []).map(song => {
                         const parts = String(song.video_title).split(' - ');
                         const title = parts[0];
                         const artist = parts.slice(1).join(' - ') || 'N/A';
@@ -1422,15 +1454,27 @@
                 failure = err;
             }
 
-            clearTimeout(skeletonTimer);
-            songbookLoading = false;
-            songbookError = !!failure;
-            buildSongIndex();
+            if (silent) {
+                // Keep what is already on screen when a background fetch fails.
+                if (failure || !songs) {
+                    console.warn('Songbook background refresh failed:', failure);
+                    return;
+                }
+                // Recover from an earlier failed first load, if any.
+                songbookError = false;
+            } else {
+                clearTimeout(skeletonTimer);
+                songbookLoading = false;
+                songbookError = !!failure;
 
-            if (failure) {
-                console.error('Songbook load error:', failure);
-                showToast('Could not load the songbook', 'error', failure.message || '');
+                if (failure) {
+                    console.error('Songbook load error:', failure);
+                    showToast('Could not load the songbook', 'error', failure.message || '');
+                }
             }
+
+            if (songs) allSongsData = songs;
+            buildSongIndex();
 
             // Re-renders the list and picks the right empty-state copy.
             applyFilter();
