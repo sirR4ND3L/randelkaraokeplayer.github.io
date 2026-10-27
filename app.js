@@ -12,7 +12,10 @@ const SHORTCUTS = {
     b: { label: 'Skip',       action: () => KaraokeApp.playNextInQueue() },
     m: { label: 'Mic',        action: () => KaraokeApp.toggleVisualizer() },
     q: { label: 'QR',         action: () => KaraokeApp.toggleQR() },
-    f: { label: 'Fullscreen', action: () => KaraokeApp.toggleFullscreen() }
+    f: { label: 'Fullscreen', action: () => KaraokeApp.toggleFullscreen() },
+    // Hidden admin shortcut: not advertised in the UI, but useful for the
+    // operator. Ignored while typing in a form field, like every other key.
+    p: { label: 'Manage songs', action: () => KaraokeApp.openManage() }
 };
 
 // Song codes are six slots including leading zeros, like a karaoke machine
@@ -1654,7 +1657,7 @@ SCORING: {
         document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
     },
 
-    // Maps physical keys (Z, C, B, F) to app actions.
+    // Maps physical keys (Z, C, B, M, Q, F, P) to app actions.
     handleGlobalKeyDown(event) {
         // Never hijack browser/OS shortcuts (Ctrl+F find, Cmd+, settings, Alt+Tab).
         if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -1705,6 +1708,13 @@ SCORING: {
         else document.exitFullscreen();
     },
 
+    // Opens song management (manage.html) in a new tab. Reachable from the
+    // hidden P shortcut and from the focus-only link in index.html, so the
+    // stage stays free of admin controls.
+    openManage() {
+        window.open('manage.html', '_blank', 'noopener');
+    },
+
     // Dynamically updates CSS variables for better scaling on mobile devices.
     initMobileScaling() {
         const apply = () => {
@@ -1737,6 +1747,7 @@ window.closeScore = () => KaraokeApp.closeScore();
 window.startPendingSong = () => KaraokeApp.startPendingSong();
 window.closeCustomAlert = () => KaraokeApp.closeCustomAlert();
 window.openSongBook = () => KaraokeApp.openSongBook();
+window.openManage = () => KaraokeApp.openManage();
 window.togglePlayPause = () => KaraokeApp.togglePlayPause();
 window.toggleQR = () => KaraokeApp.toggleQR();
 window.getPlayerShortId = () => KaraokeApp.getPlayerShortId();

@@ -42,7 +42,7 @@
     <!-- ?v= cache-buster: bump this number whenever style.css changes, otherwise a
          browser (or GitHub Pages) keeps serving the old stylesheet and silently
          ignores layout fixes. Keep it in step with the ?v on app.js below. -->
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="style.css?v=13">
     <link rel="manifest" href="manifest-player.json">
     <meta name="theme-color" content="#030303">
     <!-- RawGit was sunset and only works because it redirects to jsDelivr;
@@ -104,6 +104,12 @@
 </head>
 
 <body>
+
+    <!-- Hidden admin entry point. It stays invisible on the stage (opacity 0,
+         no pointer events) until it is reached with the Tab key, so guests
+         never see an admin control. Pressing P opens the same page. -->
+    <a id="manageShortcut" class="manage-shortcut" href="manage.html" target="_blank"
+        rel="noopener" aria-keyshortcuts="P" title="Open song management (P)">⚙ Manage songs</a>
 
     <noscript>
         <!-- Legit fallback for crawlers that do not run JS. Not hidden text:
@@ -256,6 +262,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=12" defer></script>
+    <script src="app.js?v=13" defer></script>
 </body>
 </html>

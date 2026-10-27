@@ -1371,6 +1371,36 @@ input[type=range] {
     left: -9999px;
 }
 
+/* Hidden admin shortcut on the player (P / Tab focus). Invisible and
+   click-through until it is keyboard-focused, then it behaves like a normal
+   pill button so the page stays usable without a mouse. */
+.manage-shortcut {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 2500;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--accent-color);
+    background: rgba(0, 0, 0, 0.88);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.manage-shortcut:focus {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
 /* =========================================================================
    📱 ULTRA MOBILE & RESPONSIVE DESIGN SYSTEM (ALL ANDROID SCREENS)
    ========================================================================= */
