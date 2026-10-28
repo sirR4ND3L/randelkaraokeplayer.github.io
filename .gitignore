@@ -4,6 +4,7 @@
 # Internal design notes and specs. These are working documents, not site
 # content, and were previously being copied into the public build.
 md/
+plan/
 
 # OS / editor noise
 .DS_Store
