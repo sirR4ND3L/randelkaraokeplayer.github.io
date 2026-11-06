@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Karaoke | Admin Song Library</title>
+    <!-- App surface, not a landing page. Keep it out of search engines. -->
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://sirr4nd3l.github.io/randelkaraokeplayer.github.io/admin-songs.html">
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-primary: #030303;
+            --bg-secondary: #0a0a0c;
+            --glass-light: rgba(255, 255, 255, 0.08);
+            --glass-lighter: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-border-hover: rgba(255, 255, 255, 0.2);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent-color: #007aff;
+            --accent-glow: rgba(0, 122, 255, 0.3);
+            --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            padding: clamp(16px, 4vw, 40px);
+            margin: 0;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .page-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(8px, 2vw, 16px);
+            margin-bottom: clamp(12px, 3vw, 20px);
+        }
+
+        h1 {
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            text-align: center;
+            font-size: clamp(1.6rem, 6vw, 3rem);
+            margin: 0;
+            background: linear-gradient(135deg, var(--text-primary) 0%, rgba(255, 255, 255, 0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .count-badge {
+            display: inline-block;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: clamp(12px, 1.8vw, 14px);
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .lede {
+            max-width: 760px;
+            margin: 0 auto clamp(16px, 3vw, 24px);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: clamp(12px, 1.8vw, 14px);
+            line-height: 1.6;
+        }
+
+        .auth-gate {
+            max-width: 560px;
+            margin: clamp(48px, 12vh, 130px) auto 0;
+            padding: clamp(24px, 5vw, 40px);
+            text-align: center;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.045));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+        }
+
+        .auth-gate h2 {
+            margin: 0 0 10px;
+            font-size: clamp(1.25rem, 4vw, 1.6rem);
+            font-weight: 600;
+        }
+
+        .auth-gate p {
+            margin: 0 0 18px;
+            color: var(--text-secondary);
+            font-size: clamp(13px, 2vw, 14px);
+            line-height: 1.6;
+        }
+
+        .auth-gate a {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 999px;
+            background: var(--accent-color);
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .auth-gate a:hover {
+            background: #0084ff;
+            transform: translateY(-1px);
+        }
+
+        .auth-gate .gate-hint {
+            margin: 14px 0 0;
+            color: var(--text-tertiary);
+            font-size: 12px;
+        }
+
+        .admin-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            max-width: 900px;
+            margin: 0 auto clamp(12px, 2vw, 16px);
+            color: var(--text-tertiary);
+            font-size: 12px;
+        }
+
+        .admin-bar a {
+            color: var(--text-primary);
+            text-decoration: none;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            padding: 6px 14px;
+            border-radius: 999px;
+        }
+
+        .admin-bar a:hover {
+            background: var(--glass-border);
+        }
+
+        .toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: clamp(10px, 2vw, 16px);
+            max-width: 900px;
+            margin: 0 auto clamp(12px, 2vw, 16px);
+            align-items: center;
+        }
+
+        #search {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            padding: clamp(12px, 3vw, 16px) clamp(16px, 3vw, 20px);
+            border-radius: 28px;
+            color: var(--text-primary);
+            width: 100%;
+            font-family: inherit;
+            font-size: clamp(14px, 2vw, 16px);
+            transition: var(--transition);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        #search::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        #search:focus {
+            outline: none;
+            background: var(--glass-lighter);
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 0 40px var(--accent-glow);
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            color: white;
+            border: 1px solid rgba(0, 122, 255, 0.3);
+            padding: clamp(12px, 2vw, 14px) clamp(20px, 3vw, 28px);
+            border-radius: 24px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: clamp(13px, 2vw, 15px);
+            font-weight: 600;
+            transition: var(--transition);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.25);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0, 122, 255, 0.4);
+            border-color: rgba(0, 122, 255, 0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+            max-width: 900px;
+            margin: 0 auto clamp(14px, 2.5vw, 20px);
+        }
+
+        .chip {
+            min-width: 34px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--glass-lighter);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            box-shadow: none;
+        }
+
+        .chip:hover {
+            color: var(--text-primary);
+            background: var(--glass-light);
+            border-color: var(--glass-border-hover);
+            box-shadow: none;
+        }
+
+        .chip.is-active {
+            background: linear-gradient(135deg, var(--accent-color), rgba(0, 122, 255, 0.8));
+            border-color: rgba(0, 122, 255, 0.5);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+        }
+
+        .status {
+            max-width: 900px;
+            margin: 0 auto 10px;
+            color: var(--text-tertiary);
+            font-size: clamp(12px, 1.8vw, 13px);
+            text-align: center;
+            min-height: 1.2em;
+        }
+
+        .results {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--glass-lighter);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            overflow: hidden;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .results:empty {
+            display: none;
+        }
+
+        .song-row {
+            display: grid;
+            gap: 2px;
+            width: 100%;
+            padding: clamp(11px, 2vw, 15px) clamp(16px, 3vw, 22px);
+            background: transparent;
+            border: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 0;
+            box-shadow: none;
+            text-align: left;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .song-row:last-child {
+            border-bottom: none;
+        }
+
+        .song-row:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: none;
+            box-shadow: none;
+            border-color: transparent;
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .song-row:active {
+            background: rgba(255, 255, 255, 0.12);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .song-row:focus-visible {
+            outline: 2px solid var(--accent-color);
+            outline-offset: -2px;
+        }
+
+        .song-row .song-title {
+            font-size: clamp(14px, 2vw, 16px);
+            font-weight: 600;
+            word-wrap: break-word;
+        }
+
+        .song-row .song-artist {
+            font-size: clamp(12px, 1.7vw, 14px);
+            color: var(--text-secondary);
+            word-wrap: break-word;
+        }
+
+        .more-wrap {
+            display: flex;
+            justify-content: center;
+            margin: clamp(16px, 3vw, 24px) auto 0;
+        }
+
+        #loadMore[hidden] {
+            display: none;
+        }
+
+        #loadMore {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            box-shadow: none;
+            color: var(--text-primary);
+        }
+
+        #loadMore:hover {
+            background: var(--glass-border);
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        }
+
+        .page-foot {
+            max-width: 900px;
+            margin: clamp(20px, 4vw, 32px) auto 0;
+            text-align: center;
+            font-size: clamp(12px, 1.8vw, 14px);
+        }
+
+        .page-foot a {
+            color: var(--text-tertiary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .page-foot a:hover {
+            color: var(--text-primary);
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: clamp(16px, 4vw, 28px);
+            transform: translate(-50%, 12px);
+            max-width: min(90vw, 520px);
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(20, 20, 24, 0.95);
+            border: 1px solid var(--glass-border-hover);
+            color: var(--text-primary);
+            font-size: 13px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 50;
+        }
+
+        .toast.is-visible {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
+        body.modal-open {
+            overflow: hidden;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(12px, 3vw, 24px);
+            background: rgba(0, 0, 0, 0.72);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .modal-overlay[hidden] {
+            display: none;
+        }
+
+        .modal-card {
+            position: relative;
+            width: min(720px, 100%);
+            max-height: min(86vh, 900px);
+            overflow-y: auto;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.055));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(22px, 4vw, 34px);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 40px var(--accent-glow);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 50%;
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            box-shadow: none;
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            transform: none;
+            background: var(--glass-border);
+            border-color: var(--glass-border-hover);
+            box-shadow: none;
+        }
+
+        .modal-kicker {
+            margin: 0 0 6px;
+            color: var(--accent-color);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .modal-card h2 {
+            margin: 0 0 4px;
+            padding-right: 36px;
+            font-size: clamp(19px, 4vw, 26px);
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            word-wrap: break-word;
+        }
+
+        .modal-artist {
+            margin: 0 0 16px;
+            color: var(--text-secondary);
+            font-size: clamp(13px, 2vw, 15px);
+            word-wrap: break-word;
+        }
+
+        .modal-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .modal-actions button {
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+
+        .modal-actions a {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 12px;
+            text-decoration: none;
+        }
+
+        .modal-copy-btn {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            box-shadow: none;
+            color: var(--text-primary);
+        }
+
+        .modal-copy-btn:hover {
+            background: var(--glass-border);
+            border-color: var(--glass-border-hover);
+            box-shadow: none;
+        }
+
+        .modal-status {
+            margin: 0 0 12px;
+            color: var(--text-tertiary);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .modal-status.is-error {
+            color: #ff9f9f;
+        }
+
+        .modal-status.is-success {
+            color: #b8ffcf;
+        }
+
+        .yt-results {
+            display: grid;
+            gap: 10px;
+        }
+
+        .yt-result {
+            display: grid;
+            grid-template-columns: 132px minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
+            padding: 10px;
+            background: var(--glass-lighter);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+        }
+
+        .yt-thumb img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .yt-meta {
+            min-width: 0;
+        }
+
+        .yt-title {
+            margin: 0 0 8px;
+            font-size: clamp(13px, 1.8vw, 14px);
+            font-weight: 600;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+
+        .yt-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .yt-actions button {
+            padding: 7px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+
+        .yt-actions a {
+            color: var(--text-tertiary);
+            font-size: 12px;
+            text-decoration: none;
+        }
+
+        .yt-actions a:hover {
+            color: var(--text-primary);
+        }
+
+        .yt-save-btn {
+            background: #16a34a;
+            border-color: rgba(22, 163, 74, 0.55);
+            box-shadow: 0 6px 18px rgba(22, 163, 74, 0.25);
+        }
+
+        .yt-save-btn:hover {
+            background: #22c55e;
+            border-color: rgba(34, 197, 94, 0.7);
+            box-shadow: 0 10px 26px rgba(22, 163, 74, 0.35);
+        }
+
+        .yt-save-btn[disabled] {
+            opacity: 0.65;
+            cursor: wait;
+            transform: none;
+            box-shadow: none;
+        }
+
+        @media (max-width: 520px) {
+            .yt-result {
+                grid-template-columns: 96px minmax(0, 1fr);
+            }
+        }
+
+        .print-only {
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            .toolbar {
+                grid-template-columns: 1fr;
+            }
+
+            .toolbar button {
+                width: 100%;
+            }
+        }
+
+        @media print {
+            @page {
+                margin: 0.5in;
+                size: auto;
+            }
+
+            body {
+                background: #fff !important;
+                color: #000 !important;
+                padding: 0 !important;
+            }
+
+            .no-print,
+            .toast {
+                display: none !important;
+            }
+
+            .print-only {
+                display: block !important;
+            }
+
+            .print-only h2 {
+                margin: 0 0 4px;
+                font-size: 18px;
+                color: #000;
+            }
+
+            .print-only .print-meta {
+                margin: 0 0 14px;
+                font-size: 11px;
+                color: #444;
+            }
+
+            .print-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 3px 0;
+                border-bottom: 1px solid #ddd;
+                font-size: 11px;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .print-title {
+                font-weight: 600;
+            }
+
+            .print-artist {
+                color: #333;
+                text-align: right;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-gate no-print" id="authGate">
+        <h2 id="gateTitle">Checking admin access…</h2>
+        <p id="gateMessage">Please wait while we confirm your admin session.</p>
+        <a id="gateLink" href="manage.html" hidden>Go to manage.html</a>
+        <p class="gate-hint" id="gateHint"></p>
+    </div>
+
+    <div id="catalogApp" hidden>
+        <header class="page-head no-print">
+            <h1>🎵 Admin Song Library</h1>
+            <span id="catalogCount" class="count-badge">Loading…</span>
+        </header>
+
+        <div class="admin-bar no-print">
+            <a href="manage.html">← Manage songbook</a>
+            <span id="adminEmail"></span>
+        </div>
+
+        <p class="lede no-print">
+            Search the Admin catalog. Tap a song, choose the correct YouTube video, and it is added to the official songbook immediately.
+        </p>
+
+        <div class="toolbar no-print">
+            <input type="search" id="search" placeholder="🔍 Search title or artist…"
+                autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+                aria-label="Search the Admin song library">
+            <button type="button" id="printBtn">🖨️ Print</button>
+        </div>
+
+        <div class="chips no-print" id="letterChips" role="group" aria-label="Filter by first letter of the title"></div>
+
+        <p class="status no-print" id="status" aria-live="polite">Loading Admin catalog…</p>
+
+        <div class="results" id="results"></div>
+
+        <div class="more-wrap no-print">
+            <button type="button" id="loadMore" hidden>Load more</button>
+        </div>
+
+        <div class="print-only" id="printContainer"></div>
+
+        <footer class="page-foot no-print">
+            <a href="manage.html">← Back to manage.html</a>
+            &nbsp;·&nbsp;
+            <a href="songbook.html">Public songbook</a>
+        </footer>
+    </div>
+
+    <div class="modal-overlay no-print" id="requestModal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalArtist">
+            <button type="button" class="modal-close" id="modalClose" aria-label="Close">✕</button>
+            <p class="modal-kicker">Add to the official songbook</p>
+            <h2 id="modalTitle"></h2>
+            <p class="modal-artist" id="modalArtist"></p>
+            <div class="modal-actions">
+                <button type="button" class="modal-copy-btn" id="modalCopy">📋 Copy title &amp; artist</button>
+                <button type="button" class="modal-copy-btn" id="modalRetry" hidden>🔄 Search again</button>
+                <a class="modal-copy-btn" id="modalYouTube" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">▶ Search on YouTube</a>
+            </div>
+            <p class="modal-status" id="modalStatus" aria-live="polite"></p>
+            <div class="yt-results" id="ytResults"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const PAGE_SIZE = 100;
+        const MAX_PRINT_ROWS = 5000;
+        // The catalog lives in a private Supabase Storage bucket, not in the
+        // public site root, so non-admins cannot download it.
+        const CATALOG_BUCKET = 'catalogs';
+        const CATALOG_PATH = 'admin-songs.json';
+        const YOUTUBE_ENDPOINT = 'https://karaoke-backend-topaz.vercel.app/api/youtube-search';
+
+        // Same Supabase project as admin.js. Supabase persists the admin
+        // session in localStorage, so signing in on manage.html is enough.
+        const SUPABASE_URL = 'https://blbwxnbbdsqkxbuvcrtn.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsYnd4bmJiZHNxa3hidXZjcnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5Nzc5NDgsImV4cCI6MjA5NTU1Mzk0OH0._OH1HSCUO1DfZOzefGk-j7GT-M3HplVULlziFnn--18';
+        const TABLE_NAME = 'karaoke_search_cache';
+
+        const searchInput = document.getElementById('search');
+        const resultsEl = document.getElementById('results');
+        const statusEl = document.getElementById('status');
+        const countEl = document.getElementById('catalogCount');
+        const loadMoreBtn = document.getElementById('loadMore');
+        const chipsEl = document.getElementById('letterChips');
+        const printBtn = document.getElementById('printBtn');
+        const printContainer = document.getElementById('printContainer');
+        const toastEl = document.getElementById('toast');
+
+        const catalogApp = document.getElementById('catalogApp');
+        const authGate = document.getElementById('authGate');
+        const gateTitle = document.getElementById('gateTitle');
+        const gateMessage = document.getElementById('gateMessage');
+        const gateLink = document.getElementById('gateLink');
+        const gateHint = document.getElementById('gateHint');
+        const adminEmailEl = document.getElementById('adminEmail');
+
+        const modalEl = document.getElementById('requestModal');
+        const modalTitleEl = document.getElementById('modalTitle');
+        const modalArtistEl = document.getElementById('modalArtist');
+        const modalStatusEl = document.getElementById('modalStatus');
+        const modalResultsEl = document.getElementById('ytResults');
+        const modalCloseBtn = document.getElementById('modalClose');
+        const modalCopyBtn = document.getElementById('modalCopy');
+        const modalRetryBtn = document.getElementById('modalRetry');
+        const modalYouTubeLink = document.getElementById('modalYouTube');
+
+        const supabaseClient = (typeof supabase !== 'undefined' && supabase && supabase.createClient)
+            ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+            : null;
+
+        let songs = [];          // { title, artist, titleNorm, artistNorm, search, letter, order }
+        let filtered = [];       // songs matching the current query + letter
+        let renderedCount = 0;
+        let activeLetter = '';
+        let debounceTimer = null;
+        let toastTimer = null;
+        let modalSong = null;
+        let searchToken = 0;
+        let isAdmin = false;
+        let catalogLoaded = false;
+
+        const numberFormat = new Intl.NumberFormat('en-US');
+
+        // ------------------------------------------------------------------
+        // Admin access
+        // ------------------------------------------------------------------
+        function showGate(title, message, hint) {
+            isAdmin = false;
+            catalogApp.hidden = true;
+            authGate.hidden = false;
+            gateTitle.textContent = title;
+            gateMessage.textContent = message;
+            gateLink.hidden = false;
+            gateHint.textContent = hint || '';
+            adminEmailEl.textContent = '';
+            if (!modalEl.hidden) closeRequestModal();
+        }
+
+        function showCatalog(email) {
+            if (isAdmin) return;
+            isAdmin = true;
+            authGate.hidden = true;
+            catalogApp.hidden = false;
+            adminEmailEl.textContent = email ? `Signed in as ${email}` : 'Admin mode';
+
+            if (!catalogLoaded) {
+                catalogLoaded = true;
+                buildChips();
+                loadCatalog();
+            }
+        }
+
+        async function applyAdminSession(session) {
+            if (!session || !session.user) {
+                showGate(
+                    'Admin sign-in required',
+                    'This library is only available to admins. Sign in on manage.html, then return to this page.',
+                    'Your admin session is shared across this site.'
+                );
+                return;
+            }
+
+            const email = session.user.email || '';
+
+            try {
+                // Same check as admin.js: only UIDs in admin_users are admins.
+                const { data, error } = await supabaseClient
+                    .from('admin_users')
+                    .select('user_id')
+                    .eq('user_id', session.user.id)
+                    .maybeSingle();
+
+                if (error) {
+                    showGate(
+                        'Admin check failed',
+                        'Could not confirm admin access. Make sure the Supabase migration has run, then reload this page.',
+                        error.message
+                    );
+                    return;
+                }
+
+                if (!data) {
+                    showGate(
+                        'Not an admin account',
+                        'You are signed in, but this account is not in the admin list.',
+                        email ? `Signed in as ${email}.` : ''
+                    );
+                    return;
+                }
+
+                showCatalog(email);
+            } catch (err) {
+                showGate('Admin check failed', 'Could not confirm admin access. Reload the page and try again.', err.message);
+            }
+        }
+
+        async function initAccess() {
+            if (!supabaseClient) {
+                showGate(
+                    'Sign-in unavailable',
+                    'The Supabase library could not load. Check your connection and reload this page.',
+                    'Admin access is required.'
+                );
+                return;
+            }
+
+            try {
+                const { data } = await supabaseClient.auth.getSession();
+                await applyAdminSession(data && data.session);
+            } catch (err) {
+                showGate('Could not check admin access', err.message || 'Reload the page and try again.', '');
+            }
+
+            // If the session is ended in another tab, lock this page again.
+            supabaseClient.auth.onAuthStateChange((_event, session) => {
+                applyAdminSession(session);
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Songbook helpers (kept in sync with admin.js)
+        // ------------------------------------------------------------------
+        const KARAOKE_QUALIFIER_RE = /[\(\[]\s*[^\)\]]*\b(karaoke|hd|hq|lyrics?|instrumental|version|videoke|minus|audio|official|guide)\b[^\)\]]*[\)\]]/gi;
+
+        function stripKaraokeQualifiers(text) {
+            return String(text || '')
+                .replace(KARAOKE_QUALIFIER_RE, ' ')
+                .replace(/\bkaraoke\s+version\b/gi, ' ')
+                .replace(/\bkaraoke\b/gi, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .replace(/^[\s\-–|,]+|[\s\-–|,]+$/g, '')
+                .trim();
+        }
+
+        function cleanSongTitle(text) {
+            const original = String(text || '').trim();
+            return stripKaraokeQualifiers(original) || original;
+        }
+
+        function cleanSongArtist(text) {
+            return stripKaraokeQualifiers(text);
+        }
+
+        function buildSearchQuery(title) {
+            let query = String(title || '').toLowerCase().replace(/['"]/g, '').replace(/\s+/g, ' ').trim();
+            if (!query.includes('karaoke')) query += ' karaoke';
+            return query.replace(/[^a-z0-9]/g, '');
+        }
+
+        function isMissingColumn(error, columnName = null) {
+            if (!error) return false;
+            const message = String(error.message || '');
+            if (error.code === '42703' || error.code === 'PGRST204') return true;
+            const looksLikeMissing = /does not exist|schema cache/i.test(message);
+            return columnName ? looksLikeMissing && message.includes(columnName) : looksLikeMissing;
+        }
+
+        function omitColumns(row, keys) {
+            const copy = { ...row };
+            for (const key of keys) delete copy[key];
+            return copy;
+        }
+
+        // Admin writes go straight to Supabase; RLS rejects non-admin sessions.
+        // The retry ladder keeps this usable before the source/origin
+        // migrations have run.
+        async function insertAdminSong(row) {
+            const attempts = [
+                row,
+                omitColumns(row, ['origin']),
+                omitColumns(row, ['source']),
+                omitColumns(row, ['source', 'origin'])
+            ];
+
+            let lastError = null;
+            for (const candidate of attempts) {
+                const { data, error } = await supabaseClient
+                    .from(TABLE_NAME)
+                    .insert(candidate)
+                    .select()
+                    .single();
+
+                if (!error) return data;
+                lastError = error;
+                if (!isMissingColumn(error, 'origin') && !isMissingColumn(error, 'source')) {
+                    throw error;
+                }
+            }
+            throw lastError;
+        }
+
+        // Lowercase and strip accents so "Bublé" is found by typing "buble".
+        function normalize(value) {
+            return String(value ?? '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase();
+        }
+
+        function titleLetter(title) {
+            const letter = normalize(String(title).replace(/^the\s+/i, '')).charAt(0).toUpperCase();
+            return /[A-Z]/.test(letter) ? letter : '#';
+        }
+
+        function buildChips() {
+            const letters = ['All', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), '#'];
+            const fragment = document.createDocumentFragment();
+
+            letters.forEach((letter) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'chip' + (letter === 'All' ? ' is-active' : '');
+                button.dataset.letter = letter === 'All' ? '' : letter;
+                button.textContent = letter;
+                button.addEventListener('click', () => {
+                    activeLetter = button.dataset.letter;
+                    document.querySelectorAll('.chip').forEach((chip) => {
+                        chip.classList.toggle('is-active', chip === button);
+                    });
+                    applyFilters();
+                });
+                fragment.appendChild(button);
+            });
+
+            chipsEl.appendChild(fragment);
+        }
+
+        function applyFilters() {
+            const query = normalize(searchInput.value).replace(/\s+/g, ' ').trim();
+            const tokens = query ? query.split(' ') : [];
+            const matches = [];
+
+            for (const song of songs) {
+                if (activeLetter && song.letter !== activeLetter) continue;
+                if (tokens.length && !tokens.every((token) => song.search.includes(token))) continue;
+                matches.push(song);
+            }
+
+            if (query) {
+                // Rank by how directly the query hits the title/artist. The
+                // original catalog order breaks ties so results stay stable.
+                const rankOf = (song) => {
+                    if (song.titleNorm === query) return 0;
+                    if (song.titleNorm.startsWith(query)) return 1;
+                    if (song.artistNorm.startsWith(query)) return 2;
+                    if (song.titleNorm.includes(query) || song.artistNorm.includes(query)) return 3;
+                    return 4;
+                };
+                const ranked = matches.map((song) => ({ song, rank: rankOf(song) }));
+                ranked.sort((a, b) => {
+                    if (a.rank !== b.rank) return a.rank - b.rank;
+                    const ta = String(a.song.title || '').toLowerCase();
+                    const tb = String(b.song.title || '').toLowerCase();
+                    if (ta < tb) return -1;
+                    if (ta > tb) return 1;
+                    return 0;
+                });
+                filtered = ranked.map((entry) => entry.song);
+            } else {
+                filtered = matches;
+            }
+
+            renderResults(true);
+        }
+
+        function renderResults(reset) {
+            if (reset) {
+                resultsEl.replaceChildren();
+                renderedCount = 0;
+            }
+
+            const slice = filtered.slice(renderedCount, renderedCount + PAGE_SIZE);
+            const fragment = document.createDocumentFragment();
+
+            for (const song of slice) {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'song-row';
+                row.title = 'Find this song on YouTube and add it to the songbook';
+                row.setAttribute('aria-label', `${song.title} by ${song.artist} — find karaoke video`);
+
+                const title = document.createElement('span');
+                title.className = 'song-title';
+                title.textContent = song.title;
+
+                const artist = document.createElement('span');
+                artist.className = 'song-artist';
+                artist.textContent = song.artist;
+
+                row.append(title, artist);
+                row.addEventListener('click', () => openRequestModal(song));
+                fragment.appendChild(row);
+            }
+
+            resultsEl.appendChild(fragment);
+            renderedCount += slice.length;
+            updateStatus();
+        }
+
+        function updateStatus() {
+            if (!filtered.length) {
+                statusEl.textContent = songs.length
+                    ? 'No songs match your search.'
+                    : 'Loading Admin catalog…';
+                loadMoreBtn.hidden = true;
+                return;
+            }
+
+            if (renderedCount >= filtered.length) {
+                statusEl.textContent = `Showing all ${numberFormat.format(filtered.length)} ${filtered.length === 1 ? 'match' : 'matches'}`;
+            } else {
+                statusEl.textContent = `Showing ${numberFormat.format(renderedCount)} of ${numberFormat.format(filtered.length)} matches`;
+            }
+
+            loadMoreBtn.hidden = renderedCount >= filtered.length;
+        }
+
+        function showToast(message) {
+            toastEl.textContent = message;
+            toastEl.classList.add('is-visible');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toastEl.classList.remove('is-visible'), 2200);
+        }
+
+        async function copySong(song) {
+            const text = `${song.title} — ${song.artist}`;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast(`Copied: ${text}`);
+            } catch (err) {
+                // Older browsers or non-secure contexts do not expose the
+                // async clipboard API, so fall back to the textarea trick.
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                let copied = false;
+                try {
+                    copied = document.execCommand('copy');
+                } catch (copyErr) {
+                    copied = false;
+                }
+                textarea.remove();
+                showToast(copied ? `Copied: ${text}` : `Could not copy "${text}"`);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Admin flow: Admin song -> YouTube search -> official songbook
+        // ------------------------------------------------------------------
+        // The catalog only has title + artist, so the video must be chosen by
+        // the admin. Saves go straight to Supabase with the admin session;
+        // RLS is the real gate. `origin: 'admin'` keeps the catalog tag.
+        function youtubeSearchUrl(song) {
+            return 'https://www.youtube.com/results?search_query=' +
+                encodeURIComponent(`${song.title} ${song.artist} karaoke`);
+        }
+
+        // Six-digit display code, matching the songbook and manage.html.
+        function displaySongNumber(value) {
+            if (value == null) return '';
+            const text = String(value);
+            return /^\d+$/.test(text) && text.length < 6 ? text.padStart(6, '0') : text;
+        }
+
+        function setModalStatus(message, tone) {
+            modalStatusEl.textContent = message;
+            modalStatusEl.classList.toggle('is-error', tone === 'error');
+            modalStatusEl.classList.toggle('is-success', tone === 'success');
+        }
+
+        function openRequestModal(song) {
+            if (!isAdmin) return;
+            modalSong = song;
+            modalTitleEl.textContent = song.title;
+            modalArtistEl.textContent = song.artist;
+            modalResultsEl.replaceChildren();
+            modalRetryBtn.hidden = true;
+            modalYouTubeLink.href = youtubeSearchUrl(song);
+            modalEl.hidden = false;
+            document.body.classList.add('modal-open');
+            modalCloseBtn.focus({ preventScroll: true });
+            searchYouTube(song);
+        }
+
+        function closeRequestModal() {
+            modalEl.hidden = true;
+            document.body.classList.remove('modal-open');
+            searchToken++; // invalidate any in-flight search
+            modalSong = null;
+        }
+
+        async function searchYouTube(song) {
+            const token = ++searchToken;
+            const query = `${song.title} ${song.artist} karaoke`;
+            modalResultsEl.replaceChildren();
+            modalRetryBtn.hidden = true;
+            setModalStatus('Searching YouTube for karaoke videos…');
+
+            try {
+                const response = await fetch(`${YOUTUBE_ENDPOINT}?q=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error(`YouTube search failed (HTTP ${response.status}).`);
+
+                const data = await response.json();
+                if (token !== searchToken) return;
+
+                const items = Array.isArray(data.items)
+                    ? data.items.filter((item) => item && item.id)
+                    : [];
+
+                if (!items.length) {
+                    setModalStatus('No YouTube results came back. Use “Search on YouTube” to find the video manually.', 'error');
+                    modalRetryBtn.hidden = false;
+                    return;
+                }
+
+                setModalStatus('Pick the karaoke video that matches this song. It will be added to the official songbook.');
+                for (const item of items) {
+                    modalResultsEl.appendChild(createYouTubeResult(song, item));
+                }
+            } catch (err) {
+                if (token !== searchToken) return;
+                setModalStatus(err.message || 'Could not search YouTube. Check your connection and try again.', 'error');
+                modalRetryBtn.hidden = false;
+            }
+        }
+
+        function createYouTubeResult(song, item) {
+            const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(item.id)}`;
+
+            const result = document.createElement('div');
+            result.className = 'yt-result';
+
+            const thumb = document.createElement('a');
+            thumb.className = 'yt-thumb';
+            thumb.href = watchUrl;
+            thumb.target = '_blank';
+            thumb.rel = 'noopener noreferrer';
+
+            const image = document.createElement('img');
+            image.src = `https://i.ytimg.com/vi/${encodeURIComponent(item.id)}/mqdefault.jpg`;
+            image.alt = '';
+            image.loading = 'lazy';
+            image.width = 320;
+            image.height = 180;
+            thumb.appendChild(image);
+
+            const meta = document.createElement('div');
+            meta.className = 'yt-meta';
+
+            const title = document.createElement('p');
+            title.className = 'yt-title';
+            title.textContent = item.title || `Video ${item.id}`;
+
+            const actions = document.createElement('div');
+            actions.className = 'yt-actions';
+
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.className = 'yt-save-btn';
+            saveBtn.textContent = '＋ Add to songbook';
+            saveBtn.addEventListener('click', () => saveYouTubeSong(song, item, saveBtn));
+
+            const watchLink = document.createElement('a');
+            watchLink.href = watchUrl;
+            watchLink.target = '_blank';
+            watchLink.rel = 'noopener noreferrer';
+            watchLink.textContent = 'Open on YouTube';
+
+            actions.append(saveBtn, watchLink);
+            meta.append(title, actions);
+            result.append(thumb, meta);
+            return result;
+        }
+
+        function disableOtherSaveButtons(button) {
+            modalResultsEl.querySelectorAll('.yt-save-btn').forEach((other) => {
+                if (other !== button) other.disabled = true;
+            });
+        }
+
+        async function saveYouTubeSong(song, item, button) {
+            if (!isAdmin || !modalSong || modalSong !== song) return;
+
+            button.disabled = true;
+            button.textContent = 'Adding…';
+            setModalStatus('Adding this video to the official songbook…');
+
+            try {
+                // Admin is the source of truth for title/artist. Strip any
+                // karaoke qualifiers ("(Karaoke)", "Karaoke Version", etc.)
+                // before the row becomes part of the official songbook.
+                const cleanTitle = cleanSongTitle(song.title).toUpperCase();
+                const cleanArtist = cleanSongArtist(song.artist).toUpperCase();
+                if (!cleanTitle) throw new Error('This song has no usable title.');
+
+                const videoTitle = cleanArtist ? `${cleanTitle} - ${cleanArtist}` : cleanTitle;
+                const searchQuery = buildSearchQuery(cleanTitle);
+
+                // Duplicate check runs first so a repeated tap reports the
+                // existing song instead of inserting a second row.
+                const duplicateSelect = (columns) => supabaseClient
+                    .from(TABLE_NAME)
+                    .select(columns)
+                    .or(`video_id.eq.${item.id},search_query.eq.${searchQuery}`)
+                    .limit(1);
+
+                let { data: duplicates, error: lookupError } = await duplicateSelect('id, song_number, is_verified, video_title');
+                if (lookupError && isMissingColumn(lookupError, 'song_number')) {
+                    ({ data: duplicates, error: lookupError } = await duplicateSelect('id, is_verified, video_title'));
+                }
+                if (lookupError) throw lookupError;
+
+                if (duplicates && duplicates.length) {
+                    const existing = duplicates[0];
+                    const existingNumber = displaySongNumber(
+                        existing.song_number != null ? existing.song_number : existing.id
+                    );
+                    if (modalSong !== song) return;
+                    setModalStatus(
+                        `Already in the songbook as #${existingNumber}${existing.is_verified ? '' : ' (pending review)'}.`,
+                        'success'
+                    );
+                    button.textContent = '✓ Already added';
+                    disableOtherSaveButtons(button);
+                    return;
+                }
+
+                const inserted = await insertAdminSong({
+                    search_query: searchQuery,
+                    video_id: item.id,
+                    video_title: videoTitle,
+                    is_verified: true,
+                    source: 'admin',
+                    origin: 'admin',
+                    created_at: new Date().toISOString()
+                });
+
+                if (modalSong !== song) return;
+
+                const songNumber = displaySongNumber(
+                    inserted.song_number != null ? inserted.song_number : inserted.id
+                );
+                setModalStatus(`Added #${songNumber} to the official songbook.`, 'success');
+                button.textContent = '✓ Added to songbook';
+                disableOtherSaveButtons(button);
+                showToast(`${cleanTitle} added to the official songbook.`);
+            } catch (err) {
+                if (modalSong !== song) return;
+                button.disabled = false;
+                button.textContent = '＋ Add to songbook';
+                setModalStatus(err.message || 'Could not add the song. Check your connection and try again.', 'error');
+            }
+        }
+
+        function createPrintout() {
+            printContainer.replaceChildren();
+
+            const heading = document.createElement('h2');
+            heading.textContent = 'Admin Song Library';
+
+            const meta = document.createElement('p');
+            meta.className = 'print-meta';
+
+            const query = searchInput.value.trim();
+            const parts = [];
+            if (query) parts.push(`Search: "${query}"`);
+            if (activeLetter) parts.push(`Letter: ${activeLetter}`);
+
+            const rows = filtered.slice(0, MAX_PRINT_ROWS);
+            meta.textContent = `${parts.join(' · ')} — ${numberFormat.format(rows.length)} of ${numberFormat.format(filtered.length)} matches`;
+
+            const list = document.createElement('div');
+            list.className = 'print-list';
+
+            for (const song of rows) {
+                const row = document.createElement('div');
+                row.className = 'print-row';
+
+                const title = document.createElement('span');
+                title.className = 'print-title';
+                title.textContent = song.title;
+
+                const artist = document.createElement('span');
+                artist.className = 'print-artist';
+                artist.textContent = song.artist;
+
+                row.append(title, artist);
+                list.appendChild(row);
+            }
+
+            printContainer.append(heading, meta, list);
+        }
+
+        function printFiltered() {
+            if (!songs.length) return;
+
+            // The full catalog is far too large for a useful printout. Require
+            // a search or a letter first so the printout is intentional.
+            if (!searchInput.value.trim() && !activeLetter) {
+                showToast('Search or pick a letter before printing.');
+                return;
+            }
+
+            createPrintout();
+            window.print();
+        }
+
+        async function loadCatalog() {
+            statusEl.textContent = 'Loading Admin catalog…';
+
+            try {
+                // The catalog is private: only admins can download it. The
+                // page is only reachable after the admin check, so this
+                // request carries the admin session.
+                const { data: file, error: downloadError } = await supabaseClient.storage
+                    .from(CATALOG_BUCKET)
+                    .download(CATALOG_PATH);
+                if (downloadError) throw downloadError;
+                if (!file) throw new Error('Empty catalog response');
+
+                const data = JSON.parse(await file.text());
+                if (!Array.isArray(data.songs)) throw new Error('Unexpected catalog format');
+
+                songs = data.songs.map(([title, artist], order) => {
+                    const titleNorm = normalize(title);
+                    const artistNorm = normalize(artist);
+                    return {
+                        title,
+                        artist,
+                        titleNorm,
+                        artistNorm,
+                        search: `${titleNorm} ${artistNorm}`,
+                        letter: titleLetter(title),
+                        order
+                    };
+                });
+
+                // Render the catalog alphabetically by title, numbers before letters.
+                songs.sort((a, b) => {
+                    const ta = String(a.title || '').toLowerCase();
+                    const tb = String(b.title || '').toLowerCase();
+                    if (ta < tb) return -1;
+                    if (ta > tb) return 1;
+                    return 0;
+                });
+
+                countEl.textContent = `${numberFormat.format(songs.length)} songs`;
+                filtered = songs;
+                renderResults(true);
+            } catch (err) {
+                console.error('Could not load the Admin catalog:', err);
+                countEl.textContent = 'Unavailable';
+                statusEl.textContent = 'Could not load the Admin catalog. Make sure the Supabase storage migration ran and admin-songs.json was uploaded to the catalogs bucket, then reload.';
+                loadMoreBtn.hidden = true;
+            }
+        }
+
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(applyFilters, 120);
+        });
+
+        loadMoreBtn.addEventListener('click', () => renderResults(false));
+        printBtn.addEventListener('click', printFiltered);
+
+        modalCloseBtn.addEventListener('click', closeRequestModal);
+        modalCopyBtn.addEventListener('click', () => {
+            if (modalSong) copySong(modalSong);
+        });
+        modalRetryBtn.addEventListener('click', () => {
+            if (modalSong) searchYouTube(modalSong);
+        });
+        modalEl.addEventListener('click', (event) => {
+            if (event.target === modalEl) closeRequestModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !modalEl.hidden) closeRequestModal();
+        });
+
+        window.addEventListener('afterprint', () => {
+            // Release the print rows once the dialog closes.
+            printContainer.replaceChildren();
+        });
+
+        initAccess();
+    </script>
+</body>
+</html>

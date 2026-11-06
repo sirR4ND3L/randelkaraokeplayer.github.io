@@ -1690,6 +1690,31 @@ body.admin-page #songContainer {
 
 body.admin-page .verified { border-left: 6px solid #22c55e; }
 
+/* Admin catalog shortcut (admins only) */
+body.admin-page .admin-entry {
+    max-width: 900px;
+    margin: 0 auto 20px;
+    text-align: center;
+}
+
+body.admin-page .admin-entry a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #a78bfa;
+    color: #1e1b4b;
+    padding: 12px 24px;
+    border-radius: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+body.admin-page .admin-entry a:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+}
+
 /* Manual song entry */
 body.admin-page .add-song-panel {
     max-width: 600px;
@@ -1951,6 +1976,7 @@ body.admin-page .badge {
 
 body.admin-page .badge-pending { background: #f59e0b; color: #111; }
 body.admin-page .badge-verified { background: #22c55e; color: #052e16; }
+body.admin-page .badge-admin { background: #a78bfa; color: #1e1b4b; }
 
 body.admin-page .song-line { color: rgb(203, 213, 225); overflow-wrap: anywhere; }
 

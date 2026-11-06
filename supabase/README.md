@@ -15,6 +15,19 @@ else is handled by the code in this repo and in `karaoke-backend`.
    if the book still holds sequential codes (`100000`, `100001`, …) and you
    want every existing song randomized too. It reshuffles every code, so run
    it once, while nobody is adding songs, then regenerate the printed songbook.
+6. Paste and run
+   [`migrations/2026-11-06_admin_origin.sql`](migrations/2026-11-06_admin_origin.sql).
+   This adds `karaoke_search_cache.origin` so songs added by an admin from the
+   Admin library are tagged `'admin'` and show a **From Admin** badge on
+   `manage.html`. The admin page still works without this migration; it just
+   cannot store the tag.
+7. Paste and run
+   [`migrations/2026-11-06_admin_catalog_storage.sql`](migrations/2026-11-06_admin_catalog_storage.sql).
+   This creates a private Storage bucket `catalogs` with admin-only read/write
+   policies. Then upload `data/admin-songs.json` to that bucket (Storage ->
+   catalogs -> Upload) or run `node tools/build-admin-songlist.mjs --upload`
+   with `SUPABASE_SERVICE_ROLE_KEY` set. Without this step the admin page
+   cannot download the catalog.
 
 What it does:
 

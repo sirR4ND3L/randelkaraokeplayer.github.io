@@ -102,6 +102,16 @@ Enforcement lives in Supabase, not in the browser:
    validates and rate-limits them, then inserts with `is_verified = false`.
    Set `PUBLIC_AUTO_VERIFY=true` in the backend to publish them instantly
    instead of pending review.
+5. Admins get a **🎵 Add songs from the Admin library** button on
+   `manage.html`. `admin-songs.html` is admin-only: it reuses the same
+   Supabase session, checks `admin_users`, and inserts verified songs tagged
+   `origin = 'admin'` (see
+   `supabase/migrations/2026-11-06_admin_origin.sql`). `manage.html` then
+   shows a **From Admin** badge. Karaoke qualifiers are stripped from the
+   title/artist before saving. The catalog JSON lives in a **private** Supabase
+   Storage bucket (`catalogs`) and is downloaded only after the admin check, so
+   non-admins cannot fetch it from the public site. Guests cannot open the
+   catalog page.
 
 ### 6-digit song numbers
 

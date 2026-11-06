@@ -1,6 +1,8 @@
-// v6: Number Search is a six-slot karaoke display (idle 000000, digits enter
-// from the right), so the cached remote shell is refreshed once on upgrade.
-const CACHE_NAME = 'rk-remote-v6';
+// v8: Admin catalog moved to a private Supabase Storage bucket, so it is no
+// longer fetched same-origin. The stale-while-revalidate branch below no
+// longer caches 1.6 MB of catalog data. Bumped to purge any v7 cache that
+// still holds a copy of data/admin-songs.json.
+const CACHE_NAME = 'rk-remote-v8';
 const CORE_ASSETS = [
     'remote.html',
     'manifest.json',

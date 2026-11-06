@@ -24,6 +24,14 @@
         </div>
     </div>
 
+    <!-- Admin-only shortcut into the Admin catalog. It is hidden in guest
+         mode by the [data-admin-only] rule; RLS and the catalog's own admin
+         check enforce access for real. -->
+    <div class="admin-entry" data-admin-only>
+        <a href="admin-songs.html">🎵 Add songs from the Admin library</a>
+        <p class="add-song-hint">Pick a song, choose the right YouTube video, and it is added to the official songbook immediately.</p>
+    </div>
+
     <h3 style="text-align: center; color: rgb(159, 209, 250);">Total Songs: <span id="totalSongs" style="color: rgb(103, 252, 83);">0</span></h3>
 
     <!-- Search: songbook filter or YouTube search + Supabase cache -->

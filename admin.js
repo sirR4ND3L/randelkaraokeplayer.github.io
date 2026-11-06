@@ -518,13 +518,16 @@ function debouncedLoad() {
 }
 
 const createSongCard = (song) => {
-    const { is_verified: isVerified, id, video_id, video_title } = song;
+    const { is_verified: isVerified, id, video_id, video_title, origin } = song;
     const number = songNumberOf(song);
     const { title, artist } = formatSongDisplay(video_title);
     const statusLabel = isVerified ? '✅ Verified' : '⚠️ Pending review';
     const badge = isVerified
         ? '<span class="badge badge-verified">Verified</span>'
         : '<span class="badge badge-pending">Pending</span>';
+    const originBadge = origin === 'admin'
+        ? ' <span class="badge badge-admin" title="Requested from the Admin song library">🎤 From Admin</span>'
+        : '';
 
     // Admin-only editor. In public mode CSS hides [data-admin-only] and the
     // static lines below are all a guest sees.
@@ -544,7 +547,7 @@ const createSongCard = (song) => {
 
     return `
         <div class="song-card ${isVerified ? 'verified' : ''}" data-unverified="${!isVerified}" data-id="${escapeHtml(id)}" data-number="${escapeHtml(number)}" data-title="${escapeHtml(video_title)}">
-            <p><strong>Number: ${escapeHtml(number)}</strong> ${badge}</p>
+            <p><strong>Number: ${escapeHtml(number)}</strong> ${badge}${originBadge}</p>
             <p class="song-line">${statusLabel}: ${escapeHtml(video_title || '')}</p>
             <p class="song-line">Video ID: <span>${escapeHtml(video_id)}</span></p>
             ${adminControls}
@@ -553,8 +556,8 @@ const createSongCard = (song) => {
 
 async function fetchSongRows(term) {
     const order = (query) => query
-        .order('is_verified', { ascending: true })
         .order('video_title', { ascending: true })
+        .order('is_verified', { ascending: true })
         .limit(CONFIG.MAX_SONGS_RENDERED);
 
     const base = () => supabaseClient.from(CONFIG.TABLE_NAME).select();
@@ -580,8 +583,20 @@ async function loadSongs() {
         const { data, error } = await fetchSongRows(term);
         if (error) throw error;
 
-        document.getElementById('songContainer').innerHTML = (data || []).map(createSongCard).join('');
-        document.getElementById('totalSongs').innerText = (data || []).length;
+        // Render alphabetically by title, numbers before letters, case-insensitive.
+        // Pending rows sort first within an identical title.
+        const rows = (data || []).slice().sort((a, b) => {
+            const ta = String(a.video_title || '').toLowerCase();
+            const tb = String(b.video_title || '').toLowerCase();
+            if (ta < tb) return -1;
+            if (ta > tb) return 1;
+            const va = a.is_verified ? 1 : 0;
+            const vb = b.is_verified ? 1 : 0;
+            return va - vb;
+        });
+
+        document.getElementById('songContainer').innerHTML = rows.map(createSongCard).join('');
+        document.getElementById('totalSongs').innerText = rows.length;
     } catch (err) {
         console.error("Error loading songs:", err);
         showAlert("Failed to load songs: " + err.message);

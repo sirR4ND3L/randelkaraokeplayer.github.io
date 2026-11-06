@@ -10,3 +10,9 @@ plan/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Admin catalog. It is served from a private Supabase Storage bucket, never
+# from the public site, so the generated JSON must not be committed.
+data/admin-songs.json
+
+tools/
