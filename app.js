@@ -120,7 +120,8 @@ SCORING: {
         songbookClient: null,
         songbookRefreshTimer: null,
         songbookStatusTimer: null,
-        songbookLive: false
+        songbookLive: false,
+        scoreBackgroundMusicVolume: 5
     },
 
     // --- 3. Cached DOM Elements ---
@@ -932,7 +933,7 @@ SCORING: {
         const sound = ['legendary', 'rockstar'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.CHEER : 
                       ['pro', 'amateur'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.SUCCESS : this.CONFIG.SOUND_EFFECTS.FAIL;
         this.state.scoreAudio = new Audio(sound);
-        this.state.scoreAudio.volume = 0.125;
+        this.state.scoreAudio.volume = this.state.scoreBackgroundMusicVolume;
         this.state.scoreAudio.play().catch(() => {});
     },
 
