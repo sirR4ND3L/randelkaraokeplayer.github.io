@@ -94,7 +94,7 @@ body {
 
 #alertTitle {
     font-size: clamp(20px, 8vw, 30px);
-    font-family: Arial, sans-serif;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     font-weight: 700;
     letter-spacing: 1px;
     color: var(--text-alert-color);
@@ -103,7 +103,7 @@ body {
 
 #alertMessage {
     font-size: clamp(16px, 4vw, 20px);
-    font-family: Arial, sans-serif;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     font-weight: 800;
     color: var(--text-primary);
 }
@@ -214,6 +214,11 @@ body {
     50% { transform: translateY(4px); }
 }
 
+/* Pause the drift while the score overlay owns the stage. */
+.video-container.score-active .dynamic-island {
+    animation-play-state: paused;
+}
+
 .dynamic-island h2 {
     margin: 0;
     font-size: 14px;
@@ -264,7 +269,7 @@ button {
     font-weight: 500;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    transition: var(--transition-smooth);
+    transition: var(--transition-fast);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -481,6 +486,16 @@ iframe {
     font-size: clamp(20px, 4vw, 34px);
     font-weight: 700;
     letter-spacing: 0.5px;
+}
+
+.play-gate-song {
+    font-size: clamp(13px, 2.5vw, 18px);
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .play-gate-sub {
@@ -865,8 +880,33 @@ input[type=range] {
     cursor: wait;
 }
 
+/* Touch devices have no hover: reveal the actions on tap instead of pinning
+   two 28px buttons in every row (they squeeze the title on narrow phones). */
 @media (hover: none) {
-    .songbook-row-actions { opacity: 1; }
+    .songbook-row { position: relative; }
+    .songbook-row-actions {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .songbook-row.show-actions .songbook-row-actions,
+    .songbook-row:focus-within .songbook-row-actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Reclaim the column entirely on phones — float the actions over the row. */
+@media (hover: none) and (max-width: 480px) {
+    .songbook-row-actions {
+        position: absolute;
+        right: 6px;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 3px;
+        border-radius: 18px;
+        background: rgba(10, 10, 14, 0.92);
+        z-index: 2;
+    }
 }
 
 /* The pill would sit under a notch/status bar without this. */
@@ -1038,7 +1078,7 @@ input[type=range] {
     background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
     font-family: inherit;
-    font-size: 0;
+    font-size: 15px;
     cursor: pointer;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -1059,6 +1099,31 @@ input[type=range] {
 }
 
 .stage-btn:active { transform: scale(0.92); }
+
+/* Emoji-only controls need a label for sighted mouse/keyboard users.
+   font-size is explicit so the tooltip stays small inside the round button. */
+.stage-btn::after {
+    content: attr(aria-label);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 5;
+    transition: opacity 0.15s ease;
+}
+.stage-btn:hover::after,
+.stage-btn:focus-visible::after { opacity: 1; }
+@media (hover: none) { .stage-btn::after { display: none; } }
 
 .stage-btn--primary {
     background: var(--accent-color);
@@ -1097,6 +1162,134 @@ input[type=range] {
 }
 
 .stage-btn.active .stage-btn-dot { display: block; }
+
+/* --- Microphone tuning popover ---
+   Only mounted visually while the mic is on. Positioned above the transport
+   bar so it never covers the score island or the corner overlays. */
+.stage-btn--mic-settings {
+    background: rgba(0, 255, 204, 0.08);
+    border-color: rgba(0, 255, 204, 0.22);
+}
+
+.mic-panel {
+    position: absolute;
+    z-index: 16;
+    left: 50%;
+    bottom: 76px;
+    width: min(300px, calc(100% - 32px));
+    padding: 14px 16px 12px;
+    border-radius: 18px;
+    background: rgba(10, 12, 18, 0.92);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 255, 204, 0.08);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(8px);
+    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s;
+}
+
+.mic-panel.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.mic-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.mic-panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    color: var(--text-primary);
+}
+
+.mic-panel-close {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.mic-panel-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+.mic-level-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.mic-level-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 34px;
+}
+
+.mic-level-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+#micLevelFill {
+    width: 0%;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #4cd964, #00ffcc 70%, #ffcc00);
+    transition: width 0.08s linear;
+}
+
+.mic-sensitivity-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mic-sensitivity-row label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 60px;
+}
+
+.mic-sensitivity-row input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    accent-color: #00ffcc;
+    cursor: pointer;
+}
+
+#micSensitivityValue {
+    font-size: 11px;
+    font-weight: 700;
+    color: #00ffcc;
+    min-width: 34px;
+    text-align: right;
+}
+
+.mic-panel-hint {
+    margin: 10px 0 0;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
 
 /* Songbook toggle reflects whether the embedded panel is open. */
 #openSBBtn[aria-pressed="true"] {
@@ -1280,6 +1473,13 @@ input[type=range] {
     letter-spacing: 1px;
 }
 
+.qr-sub {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    margin: 2px 0 0;
+    text-align: right;
+}
+
 /* White plate is required: the library draws dark modules on a transparent
    canvas, and dark modules on a dark theme are unscannable. */
 #qrStage {
@@ -1354,16 +1554,54 @@ input[type=range] {
 .score-overlay.active .score-number {
     transform: translateY(0) scale(1);
 }
+/* The overlay itself fades in over 0.5s. Delay the spring so it plays while
+   visible instead of finishing inside a 0-opacity container. */
+.score-overlay.active .score-rank { transition-delay: 0.3s; }
+.score-overlay.active .score-number { transition-delay: 0.45s; }
+
+/* Per-rank celebration. data-rank comes from getRankData().rank in app.js;
+   the tints echo the same colors used for the rank label. */
+.score-overlay[data-rank="legendary"] .score-number {
+    background-image: linear-gradient(180deg, #fff 0%, #ffcc00 100%);
+    filter: drop-shadow(0 0 36px rgba(255, 204, 0, 0.55));
+}
+.score-overlay[data-rank="rockstar"] .score-number {
+    background-image: linear-gradient(180deg, #fff 0%, #007aff 100%);
+    filter: drop-shadow(0 0 30px rgba(0, 122, 255, 0.5));
+}
+.score-overlay[data-rank="pro"] .score-number {
+    background-image: linear-gradient(180deg, #fff 0%, #4cd964 100%);
+    filter: drop-shadow(0 0 30px rgba(76, 217, 100, 0.45));
+}
+.score-overlay[data-rank="amateur"] .score-number {
+    background-image: linear-gradient(180deg, #fff 0%, #ff9500 100%);
+    filter: drop-shadow(0 0 26px rgba(255, 149, 0, 0.42));
+}
+.score-overlay[data-rank="beginner"] .score-number {
+    background-image: linear-gradient(180deg, #fff 0%, #ff3b30 100%);
+    filter: drop-shadow(0 0 24px rgba(255, 59, 48, 0.38));
+}
+@media (prefers-reduced-motion: no-preference) {
+    .score-overlay[data-rank="legendary"] .score-number {
+        animation: legendaryPulse 1.5s ease-in-out infinite alternate;
+    }
+    .score-overlay[data-rank="beginner"] .score-number {
+        animation: beginnerPulse 1.8s ease-in-out infinite alternate;
+    }
+}
+@keyframes legendaryPulse {
+    from { filter: drop-shadow(0 0 20px rgba(255, 204, 0, 0.4)); }
+    to   { filter: drop-shadow(0 0 60px rgba(255, 204, 0, 0.9)); }
+}
+@keyframes beginnerPulse {
+    from { filter: drop-shadow(0 0 14px rgba(255, 59, 48, 0.3)); }
+    to   { filter: drop-shadow(0 0 32px rgba(255, 59, 48, 0.55)); }
+}
 
 .score-message {
     color: var(--text-secondary);
     font-size: 16px;
     margin-bottom: 30px;
-}
-
-.score-actions {
-    display: flex;
-    gap: 16px;
 }
 
 .sr-only {
@@ -1430,14 +1668,6 @@ input[type=range] {
     .score-message {
         font-size: 12px !important;
         margin-bottom: 12px !important;
-    }
-    .score-actions {
-        gap: 8px !important;
-    }
-    .score-actions button {
-        padding: 8px 16px !important;
-        font-size: 11px !important;
-        border-radius: 12px !important;
     }
 }
 
@@ -1509,14 +1739,6 @@ input[type=range] {
     .score-message {
         font-size: 12px !important;
         margin-bottom: 12px !important;
-    }
-    .score-actions {
-        gap: 8px !important;
-    }
-    .score-actions button {
-        padding: 8px 16px !important;
-        font-size: 11px !important;
-        border-radius: 12px !important;
     }
 
 }
@@ -1604,8 +1826,6 @@ input[type=range] {
 @media (max-width: 280px) {
     :root { --mobile-button-size: 32px; }
     .button-row { gap: 6px !important; }
-    .score-actions { flex-direction: column; width: 100%; gap: 6px; }
-    .score-actions button { width: 100%; }
 }
 
 /* =========================================================================
@@ -1618,8 +1838,8 @@ body.admin-page {
     overflow-y: auto;
     padding: 40px;
     margin: 0;
-    color: #f8fafc;
-    background: radial-gradient(circle at top right, #1e293b, #0f172a);
+    color: var(--text-primary);
+    background: linear-gradient(135deg, var(--bg-color), #0a0a0c);
 }
 
 body.admin-page h1 { text-align: center; margin-bottom: 30px; letter-spacing: -1px; }
@@ -1639,8 +1859,8 @@ body.admin-page input {
 body.admin-page input::placeholder { color: rgba(255, 255, 255, 0.4); }
 
 body.admin-page button {
-    background: #38bdf8;
-    color: #0f172a;
+    background: var(--accent-color);
+    color: #fff;
     border: none;
     padding: 12px;
     border-radius: 14px;
@@ -1654,7 +1874,7 @@ body.admin-page button:hover { opacity: 0.9; transform: none; }
 
 /* Glass Cards */
 body.admin-page .song-card {
-    background: rgba(30, 41, 59, 0.6);
+    background: var(--glass-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1668,7 +1888,7 @@ body.admin-page .song-card {
 }
 
 body.admin-page .song-card:hover {
-    background: rgba(51, 65, 85, 0.7);
+    background: rgba(255, 255, 255, 0.09);
     transform: translateY(-5px);
 }
 
@@ -2041,6 +2261,10 @@ body.admin-page .admin-maintenance button { margin: 10px 0; }
     }
     .blob {
         animation: none;
+    }
+    .score-rank, .score-number {
+        transition: none;
+        transition-delay: 0s;
     }
     * {
         scroll-behavior: auto !important;

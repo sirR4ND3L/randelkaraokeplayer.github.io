@@ -913,9 +913,9 @@
                     <span aria-hidden="true">🔊</span>
                 </div>
                 <div class="volume-actions">
-                    <button id="volumeApplyBtn" class="btn-glass" type="button" onclick="sendVolume()">Apply to player</button>
+                    <button id="volumeApplyBtn" class="btn-glass" type="button" onclick="sendVolume()">Set volume</button>
                 </div>
-                <p id="volumeHint" class="hint-text">Applies to the player screen. It stays until the song or page reloads.</p>
+                <p id="volumeHint" class="hint-text">Changes send automatically. Applies to the player screen until the song or page reloads.</p>
             </div>
 
             <!-- Number pad: only visible in Number Search mode -->
@@ -1602,6 +1602,29 @@
             syncQuickModeUI();
         }
 
+        // The hint is useful once. Number mode keeps it because the keypad
+        // instructions are still needed there.
+        const HINT_DISMISSED_KEY = 'rk_hint_dismissed';
+        let quickHintDismissed = false;
+        try { quickHintDismissed = localStorage.getItem(HINT_DISMISSED_KEY) === '1'; } catch (_) {}
+
+        function applyQuickHint() {
+            const hint = el('quickHint');
+            if (!hint) return;
+            const isNumber = quickMode === 'number';
+            hint.classList.toggle('hidden', quickHintDismissed && !isNumber);
+            hint.innerText = isNumber
+                ? 'Tap the keypad — digits fill in from the right (000000–999999).'
+                : 'Not in the songbook? Search by title/artist for best results.';
+        }
+
+        function dismissQuickHint() {
+            if (quickHintDismissed) return;
+            quickHintDismissed = true;
+            try { localStorage.setItem(HINT_DISMISSED_KEY, '1'); } catch (_) {}
+            applyQuickHint();
+        }
+
         function syncQuickModeUI() {
             const isNumber = quickMode === 'number';
             const toggle = el('quickModeToggle');
@@ -1622,9 +1645,7 @@
             input.setAttribute('aria-label', isNumber ? 'Songbook number' : 'Quick song search');
 
             el('numberPad').classList.toggle('hidden', !isNumber);
-            el('quickHint').innerText = isNumber
-                ? 'Tap the keypad — digits fill in from the right (000000–999999).'
-                : 'Not in the songbook? Search by title/artist for best results.';
+            applyQuickHint();
 
             padDigits = '';
             renderPadInput();
@@ -1910,7 +1931,8 @@
                 const directId = extractVideoId(query);
                 if (directId) {
                     input.value = '';
-                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: directId, videoTitle: 'Direct link: ' + directId }, btn);
+                    const sent = await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: directId, videoTitle: 'Direct link: ' + directId }, btn);
+                    if (sent) dismissQuickHint();
                     return;
                 }
 
@@ -1926,7 +1948,8 @@
 
                 if (result) {
                     input.value = '';
-                    await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: result.id, videoTitle: result.title }, btn);
+                    const sent = await sendCommand({ action: playNow ? 'play' : 'reserve', videoId: result.id, videoTitle: result.title }, btn);
+                    if (sent) dismissQuickHint();
                 } else {
                     showToast('Song not found', 'error', 'Try a different title or artist.');
                 }
@@ -1972,8 +1995,16 @@
 
         // ---------------------------------------------------------------
         // Volume control (moved off the player screen in Round 2).
+        // The slider now sends itself after a short pause; the button stays as
+        // an explicit fallback. sendCommand() rejects overlaps (commandInFlight)
+        // and polls for ~20s, so every send funnels through flushVolume().
         // ---------------------------------------------------------------
         let volumeDirty = false;
+        let volumeInFlight = false;
+        let volumeResend = false;
+        let volumeDebounceTimer = null;
+        let volumeFlushTimer = null;
+        const VOLUME_DEBOUNCE_MS = 500;
 
         function readVolume() {
             const v = parseInt(el('volumeSlider').value, 10);
@@ -1984,18 +2015,57 @@
             el('volumeValue').textContent = String(v);
         }
 
-        async function sendVolume() {
-            const btn = el('volumeApplyBtn');
+        // Always re-reads the slider, so a value changed while a command is in
+        // flight is picked up by the follow-up instead of sending a stale number.
+        async function pushVolume() {
+            if (volumeInFlight) { volumeResend = true; return; }
             const value = readVolume();
             setVolumeReadout(value);
-            if (!volumeDirty) {
+            volumeInFlight = true;
+            try {
+                const ok = await sendCommand({ action: 'volume', volume: value }, el('volumeApplyBtn'));
+                if (ok) volumeDirty = false;
+            } finally {
+                volumeInFlight = false;
+            }
+        }
+
+        // Single entry point for automatic and explicit sends. If a song command
+        // is busy, remember the intent and retry when that command finishes.
+        function flushVolume() {
+            if (commandInFlight || volumeInFlight) {
+                volumeResend = true;
+                return;
+            }
+            volumeResend = false;
+            pushVolume();
+        }
+
+        function scheduleVolumeFlush() {
+            if (volumeFlushTimer) return;
+            volumeFlushTimer = setTimeout(() => {
+                volumeFlushTimer = null;
+                flushVolume();
+            }, 0);
+        }
+
+        function scheduleVolume() {
+            setVolumeReadout(readVolume());
+            volumeDirty = true;
+            clearTimeout(volumeDebounceTimer);
+            volumeDebounceTimer = setTimeout(flushVolume, VOLUME_DEBOUNCE_MS);
+        }
+
+        // Explicit "Set volume" button.
+        function sendVolume() {
+            clearTimeout(volumeDebounceTimer);
+            const value = readVolume();
+            setVolumeReadout(value);
+            if (!volumeDirty && !volumeResend) {
                 showToast('Volume already at ' + value + '%', '', 'Move the slider first.');
                 return;
             }
-            // Reuses the normal command pipeline: insert a volume row, wait for the
-            // player to flip it to ack/failed. Same feedback as a song command.
-            const ok = await sendCommand({ action: 'volume', volume: value }, btn);
-            if (ok) volumeDirty = false;
+            flushVolume();
         }
 
         // Command delivery (Supabase remote_commands)
@@ -2152,6 +2222,9 @@
             commandInFlight = on;
             const actions = el('quickActions');
             if (actions) actions.classList.toggle('busy', on);
+            // A volume change that arrived while a song command was running
+            // goes out now, with the latest slider value.
+            if (!on && volumeResend) scheduleVolumeFlush();
         }
 
         // ---------------------------------------------------------------
@@ -2238,12 +2311,9 @@
         el('songList').addEventListener('click', onSongListClick);
         el('quickSearchInput').addEventListener('input', onQuickInput);
 
-        // Volume slider: mark dirty while moving, send only on Apply so a drag
-        // does not fire a command per pixel.
-        el('volumeSlider').addEventListener('input', () => {
-            setVolumeReadout(readVolume());
-            volumeDirty = true;
-        });
+        // Volume slider: trailing debounce means one command per drag pause.
+        // All sends are serialized in flushVolume() above.
+        el('volumeSlider').addEventListener('input', scheduleVolume);
         setSongbookOpen(songbookOpen);
         syncQuickModeUI();
 

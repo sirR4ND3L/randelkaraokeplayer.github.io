@@ -42,7 +42,7 @@
     <!-- ?v= cache-buster: bump this number whenever style.css changes, otherwise a
          browser (or GitHub Pages) keeps serving the old stylesheet and silently
          ignores layout fixes. Keep it in step with the ?v on app.js below. -->
-    <link rel="stylesheet" href="style.css?v=13">
+    <link rel="stylesheet" href="style.css?v=16">
     <link rel="manifest" href="manifest-player.json">
     <meta name="theme-color" content="#030303">
     <!-- RawGit was sunset and only works because it redirects to jsDelivr;
@@ -198,6 +198,7 @@
                              initPlayerBadge/copyPlayerId keep working. -->
                         <span id="playerIdBadge" class="player-id-badge">P-</span>
                     </div>
+                    <p class="qr-sub">Open on your phone</p>
                     <div id="qrStage"></div>
                 </div>
 
@@ -205,10 +206,6 @@
                     <div class="score-rank" id="finalRank">Rockstar</div>
                     <div class="score-number" id="finalScore">85</div>
                     <p class="score-message" id="finalMessage">Incredible performance!</p>
-                    <div class="score-actions">
-                        <button class="primary" onclick="closeScore()" aria-label="Continue to next song">Continue</button>
-                        <button onclick="restartVideo()" aria-label="Sing song again">Sing Again</button>
-                    </div>
                 </div>
 
                 <div id="playerPlaceholder" class="player-placeholder">
@@ -230,8 +227,29 @@
                     onclick="startPendingSong()" aria-label="Tap to start playing the song">
                     <span class="play-gate-icon" aria-hidden="true">▶</span>
                     <span class="play-gate-title">Tap to Start</span>
+                    <span class="play-gate-song" id="playGateSong"></span>
                     <span class="play-gate-sub" id="playGateReason">Playback was blocked by the browser</span>
                 </button>
+
+                <!-- Microphone tuning popover. Sits just above the transport bar
+                     and is only reachable while the mic is on. -->
+                <div id="micPanel" class="mic-panel" role="dialog" aria-label="Microphone settings" aria-hidden="true">
+                    <div class="mic-panel-head">
+                        <span class="mic-panel-title"><span aria-hidden="true">🎙️</span> Microphone</span>
+                        <button id="micPanelClose" class="mic-panel-close" type="button" onclick="toggleMicPanel(false)" aria-label="Close microphone settings">✕</button>
+                    </div>
+                    <div class="mic-level-row">
+                        <span class="mic-level-label">Input</span>
+                        <div class="mic-level-bar" aria-hidden="true"><div id="micLevelFill"></div></div>
+                    </div>
+                    <div class="mic-sensitivity-row">
+                        <label for="micSensitivity">Sensitivity</label>
+                        <input id="micSensitivity" type="range" min="0.5" max="2.5" step="0.1" value="1"
+                            aria-label="Microphone sensitivity">
+                        <output id="micSensitivityValue" for="micSensitivity">1.0×</output>
+                    </div>
+                    <p class="mic-panel-hint">Raise sensitivity for a quiet mic. Sing close and steady for the best score.</p>
+                </div>
 
                 <!-- Transport controls, bottom-center INSIDE the stage. The volume
                      slider was removed: guests control volume from remote.html. -->
@@ -250,6 +268,11 @@
                         <span id="micPulseIndicator" class="stage-btn-dot"></span>
                         <span class="icon" aria-hidden="true">🎙️</span>
                     </button>
+                    <!-- Only shown while the mic is on. Opens the live input meter
+                         and sensitivity control used to tune the singing experience. -->
+                    <button id="micSettingsBtn" class="stage-btn stage-btn--mic-settings" onclick="toggleMicPanel()" aria-label="Microphone settings" aria-pressed="false" aria-controls="micPanel" title="Microphone settings" style="display: none;">
+                        <span class="icon" aria-hidden="true">🎚️</span>
+                    </button>
                     <button id="qrToggleBtn" class="stage-btn" onclick="toggleQR()" aria-label="Show or hide the QR code" aria-keyshortcuts="Q" aria-pressed="true" aria-controls="qrOverlay">
                         <span class="icon" aria-hidden="true">📱</span>
                     </button>
@@ -262,6 +285,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=13" defer></script>
+    <script src="app.js?v=16" defer></script>
 </body>
 </html>

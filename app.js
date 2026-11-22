@@ -49,20 +49,43 @@ const KaraokeApp = {
         // on a slow connection, short enough that nobody stares at a black screen.
         PLAY_GATE_GRACE_MS: 4000,
 
-// --- Scoring model ---
-// Tuned to be forgiving: simply singing audibly already earns a solid
-// score, and volume, pitch and steadiness are bonuses rather than gates.
-// A steady everyday singer lands in the 70-85 "Pro/Rockstar" band, and
-// 90+ is reserved for a loud, on-key, consistent voice held for a while.
-SCORING: {
+        // --- Microphone capture & live tuning ---
+        // The browser's automatic gain control stays off (it pumps the level
+        // between phrases). Instead a small software GainNode lets the singer
+        // compensate for a quiet microphone, and a high-pass filter strips the
+        // rumble, HVAC hum and handling thumps that used to confuse the pitch
+        // detector. Nothing is ever routed to the speakers, so no echo/feedback.
+        MIC: {
+            SENSITIVITY: 1.0,          // default software gain (0.5 - 2.5)
+            MIN_SENSITIVITY: 0.5,
+            MAX_SENSITIVITY: 2.5,
+            HIGHPASS_HZ: 70,           // below almost every singing fundamental
+            LEVEL_SMOOTHING: 0.6,      // per-second easing for the input meter
+            METER_SCALE: 5,            // maps quiet RMS readings onto a useful bar
+            STORAGE_KEY: 'randelKaraokeMicSensitivity'
+        },
+
+        // --- Scoring model ---
+        // Tuned to be forgiving: simply singing audibly already earns a solid
+        // score, and volume, pitch clarity and steadiness are bonuses rather than
+        // gates. A steady everyday singer lands in the 70-85 "Pro/Rockstar"
+        // band, and 90+ is reserved for a loud, clear, on-key voice held a while.
+        SCORING: {
             TICK_MS: 50,            // scoring sample interval
             VOICE_GATE: 2.0,        // energy below this counts as a rest
             LOUDNESS_SPAN: 18,      // energy above the gate that earns full volume credit
             VOICE_FLOOR: 0.66,      // credit for merely singing audibly
-            PITCH_MULT: 1.10,       // bonus multiplier for a trackable note
+            PITCH_MULT: 1.10,       // bonus multiplier for a clear, trackable note
             PITCHLESS_MULT: 0.85,   // penalty when no pitch can be detected at all
+            // Normalized autocorrelation strength (0-1) of the detected period.
+            // A weak, noisy reading earns only part of the pitch bonus, so
+            // mumbling / breath noise can no longer pass as a "trackable note".
+            CLARITY_GATE: 0.30,     // below this the frame counts as unvoiced
+            CLARITY_FULL: 0.75,     // clarity at which the full pitch bonus applies
+            PEAK_RATIO: 0.90,       // first autocorrelation peak this close to the
+                                    // strongest one wins (guards against octave errors)
             JITTER_SPAN: 300,       // cents of pitch movement treated as maximum instability
-            JITTER_FLOOR: 0.85,     // worst-case multiplier applied by instability
+            JITTER_FLOOR: 0.72,     // worst-case multiplier applied by instability
             // Smoothing weights are expressed per SECOND and converted to a per-tick
             // factor by tickAlpha(), so changing TICK_MS no longer silently retunes
             // the whole model. (Values below are the old per-tick numbers converted:
@@ -71,8 +94,8 @@ SCORING: {
             PERF_SMOOTHING: 0.556,   // how fast the meter chases current performance
             RISE_RATE: 0.472,        // score climbs within a few good phrases
             FALL_RATE: 0.226,        // ...and drifts down more slowly
-            WARMUP_MS: 2000,         // voiced time discarded while the analyser settles
-            MIN_PITCH_HZ: 60,       // widest vocal range accepted from the detector
+            WARMUP_MS: 1200,         // voiced time discarded while the analyser settles
+            MIN_PITCH_HZ: 70,       // widest vocal range accepted from the detector
             MAX_PITCH_HZ: 1200
         }
     },
@@ -88,6 +111,11 @@ SCORING: {
         micBuffer: null,
         scoreBuffer: null,
         micStream: null,
+        micFilter: null,
+        micGain: null,
+        micSensitivity: 1.0,
+        micLevel: 0,
+        pitchClarity: 0,
         isMicActive: false,
         currentScore: 0,
         peakScore: 0,
@@ -121,7 +149,7 @@ SCORING: {
         songbookRefreshTimer: null,
         songbookStatusTimer: null,
         songbookLive: false,
-        scoreBackgroundMusicVolume: 5
+        scoreBackgroundMusicVolume: 0.5
     },
 
     // --- 3. Cached DOM Elements ---
@@ -168,9 +196,11 @@ SCORING: {
             'scoreMeter', 'scoreBarFill', 
             'liveScoreValue', 'scoreOverlay', 'finalScore', 
             'finalRank', 'finalMessage', 'micPulseIndicator',
+            'micSettingsBtn', 'micPanel', 'micPanelClose', 'micLevelFill',
+            'micSensitivity', 'micSensitivityValue',
             'qrOverlay', 'qrStage', 'qrToggleBtn', 'playPauseBtn', 'playerIdBadge',
             'queueOverlay', 'queueNextTitle', 'queueNextRow', 'queueCountBadge',
-            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer', 'playGate', 'playGateReason',
+            'alertTitle', 'alertMessage', 'customAlert', 'bgvPlayer', 'playGate', 'playGateReason', 'playGateSong',
             'songbookPanel', 'songbookList', 'songbookFilter', 'songbookStatus',
             'songbookCount', 'songbookCloseBtn', 'openSBBtn'
         ];
@@ -306,12 +336,20 @@ SCORING: {
         const gate = this.elements.playGate;
         if (!gate) return;
         this.clearPlayGateTimer();
+        // Name the song waiting behind the gate, so a blocked autoplay started
+        // from the phone is recognisable at a glance. nowPlayingTitle is set by
+        // updateNowPlayingUI() on every loadSong(), before the gate can arm.
+        if (this.elements.playGateSong) {
+            this.elements.playGateSong.textContent = this.state.nowPlayingTitle
+                ? `“${this.state.nowPlayingTitle}”` : '';
+        }
         if (this.elements.playGateReason) this.elements.playGateReason.innerText = reason;
         gate.classList.add('active');
     },
 
     hidePlayGate() {
         this.clearPlayGateTimer();
+        if (this.elements.playGateSong) this.elements.playGateSong.textContent = '';
         if (this.elements.playGate) this.elements.playGate.classList.remove('active');
     },
 
@@ -592,42 +630,48 @@ SCORING: {
     // Handles microphone access, real-time pitch detection, and score calculation.
 
     async toggleVisualizer() {
-        const { audioStatus, scoreMeter, micPulseIndicator } = this.elements;
+        const { audioStatus, scoreMeter, micPulseIndicator, micSettingsBtn } = this.elements;
 
         if (this.state.isMicActive) {
             this.stopScoring();
+            this.closeMicPanel();
             if (this.state.micStream) {
                 this.state.micStream.getTracks().forEach(t => t.stop());
                 this.state.micStream = null;
             }
-            // Disconnect the source node, otherwise every mic toggle leaves another
-            // live node attached to the analyser.
-            if (this.state.micSource) {
-                this.state.micSource.disconnect();
-                this.state.micSource = null;
-            }
+            // Tear down the whole chain (source -> filter -> gain -> analyser).
+            // Disconnecting only the source used to leave a live gain/filter node
+            // behind on every toggle.
+            [this.state.micSource, this.state.micFilter, this.state.micGain].forEach(node => {
+                if (node) node.disconnect();
+            });
+            this.state.micSource = null;
+            this.state.micFilter = null;
+            this.state.micGain = null;
+            this.state.micAnalyser = null;
+            this.state.micLevel = 0;
             this.state.isMicActive = false;
-            
+
             audioStatus.classList.remove('active');
             this.setMicLabel(false);
             scoreMeter.style.display = "none";
             this.syncMicPressed();
             micPulseIndicator.style.display = 'none';
+            if (micSettingsBtn) micSettingsBtn.style.display = 'none';
             return;
         }
 
         try {
-            // 'autoGainControl' is switched off so the browser never auto-adjusts the
-            // mic volume mid-performance: AGC pumps the level up and down between
-            // phrases, which both distorts what the singer hears and makes the
-            // energy-based score swing for no real reason. 'echoCancellation' stays
-            // on so the app can ignore the music coming from the speakers.
-            this.state.micStream = await navigator.mediaDevices.getUserMedia({ 
+            // AGC stays off: it pumps the level between phrases and makes the
+            // energy score swing for no reason. Echo cancellation keeps the
+            // backing track out of the analysis; noise suppression stays off
+            // because it can chew up sustained notes.
+            this.state.micStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     autoGainControl: false,
                     echoCancellation: true,
                     noiseSuppression: false
-                } 
+                }
             });
 
             if (!this.state.audioContext) {
@@ -638,37 +682,111 @@ SCORING: {
             if (this.state.audioContext.state === 'suspended') {
                 this.state.audioContext.resume().catch(() => {});
             }
-            
+
+            const M = this.CONFIG.MIC;
             this.state.micAnalyser = this.state.audioContext.createAnalyser();
             this.state.micAnalyser.fftSize = 2048;
+            // We read raw time-domain samples ourselves, so the analyser's own
+            // frequency smoothing would only add latency.
+            this.state.micAnalyser.smoothingTimeConstant = 0;
+
+            this.state.micFilter = this.state.audioContext.createBiquadFilter();
+            this.state.micFilter.type = 'highpass';
+            this.state.micFilter.frequency.value = M.HIGHPASS_HZ;
+            this.state.micFilter.Q.value = 0.7;
+
+            this.state.micGain = this.state.audioContext.createGain();
             this.state.micSource = this.state.audioContext.createMediaStreamSource(this.state.micStream);
-            this.state.micSource.connect(this.state.micAnalyser);
-            // The scorer needs its own buffer: micBuffer is refilled every animation
-            // frame by the pulse loop.
+
+            // source -> rumble filter -> user gain -> analyser. Deliberately NOT
+            // routed to the speakers: monitoring the mic would feed back into it.
+            this.state.micSource.connect(this.state.micFilter);
+            this.state.micFilter.connect(this.state.micGain);
+            this.state.micGain.connect(this.state.micAnalyser);
+
+            // The pulse loop and the scorer each need their own buffer.
             this.state.micBuffer = new Float32Array(this.state.micAnalyser.fftSize);
             this.state.scoreBuffer = new Float32Array(this.state.micAnalyser.fftSize);
-            
+
+            // Restore the singer's saved sensitivity and sync the slider UI.
+            this.setMicSensitivity(this.loadMicSensitivity(), false);
+
             this.state.isMicActive = true;
-        this.syncMicPressed();
+            this.syncMicPressed();
 
             audioStatus.classList.add('active');
             this.setMicLabel(true);
             scoreMeter.style.display = "flex";
-            
+            if (micSettingsBtn) micSettingsBtn.style.display = '';
+
             this.startScoring();
             this.runPulseAnimation();
         } catch (err) {
             console.error("Microphone access error:", err);
             this.showCustomAlert("Microphone access is required for scoring. Please allow microphone permissions and try again.");
             this.state.isMicActive = false;
+            if (this.state.micStream) {
+                this.state.micStream.getTracks().forEach(t => t.stop());
+                this.state.micStream = null;
+            }
         }
     },
 
-    // Smooth animation loop for the microphone pulse effect (RequestAnimationFrame).
+    // Reads the saved sensitivity, guarding against corrupt/out-of-range values.
+    loadMicSensitivity() {
+        const M = this.CONFIG.MIC;
+        let value = M.SENSITIVITY;
+        try {
+            const saved = window.localStorage.getItem(M.STORAGE_KEY);
+            if (saved !== null) {
+                const parsed = Number(saved);
+                if (!isNaN(parsed)) value = parsed;
+            }
+        } catch (err) { /* private mode / disabled storage: keep the default */ }
+        return Math.min(M.MAX_SENSITIVITY, Math.max(M.MIN_SENSITIVITY, value));
+    },
+
+    // Applies gain to the live node, updates the UI and optionally remembers it.
+    setMicSensitivity(value, persist = true) {
+        const M = this.CONFIG.MIC;
+        const numeric = Number(value);
+        const gainValue = Math.min(M.MAX_SENSITIVITY, Math.max(M.MIN_SENSITIVITY, isNaN(numeric) ? M.SENSITIVITY : numeric));
+        this.state.micSensitivity = gainValue;
+
+        if (this.state.micGain && this.state.audioContext) {
+            // Short ramp avoids a click if the slider is moved mid-phrase.
+            const now = this.state.audioContext.currentTime;
+            this.state.micGain.gain.cancelScheduledValues(now);
+            this.state.micGain.gain.setTargetAtTime(gainValue, now, 0.02);
+        }
+
+        const { micSensitivity, micSensitivityValue } = this.elements;
+        if (micSensitivity) micSensitivity.value = String(gainValue);
+        if (micSensitivityValue) micSensitivityValue.textContent = gainValue.toFixed(1) + '×';
+
+        if (persist) {
+            try { window.localStorage.setItem(M.STORAGE_KEY, String(gainValue)); }
+            catch (err) { /* storage may be unavailable; the live gain still works */ }
+        }
+    },
+
+    // Shows/hides the mic tuning popover while the mic is on.
+    toggleMicPanel(force) {
+        const { micPanel, micSettingsBtn } = this.elements;
+        if (!micPanel || !this.state.isMicActive) return;
+        const open = typeof force === 'boolean' ? force : !micPanel.classList.contains('is-open');
+        micPanel.classList.toggle('is-open', open);
+        micPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        if (micSettingsBtn) micSettingsBtn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    },
+
+    closeMicPanel() { this.toggleMicPanel(false); },
+
+    // Smooth animation loop for the mic pulse dot and the live input meter.
     runPulseAnimation() {
         if (!this.state.isMicActive || !this.state.micAnalyser) return;
-        
-        const { micPulseIndicator } = this.elements;
+
+        const { micPulseIndicator, micLevelFill } = this.elements;
         if (!micPulseIndicator) return;
 
         this.state.micAnalyser.getFloatTimeDomainData(this.state.micBuffer);
@@ -676,19 +794,26 @@ SCORING: {
         for (let i = 0; i < this.state.micBuffer.length; i++) {
             sum += this.state.micBuffer[i] * this.state.micBuffer[i];
         }
-        const volume = Math.sqrt(sum / this.state.micBuffer.length) * 100;
+        const rms = Math.sqrt(sum / this.state.micBuffer.length) * 100;
 
-        // Always set a resting state first, otherwise the dot stays hidden from the
-        // display:none applied when the mic was last switched off.
+        // Ease the raw RMS so the dot and the meter react to phrases instead of
+        // flickering on individual waveform samples.
+        const alpha = this.tickAlpha(this.CONFIG.MIC.LEVEL_SMOOTHING, 1000 / 60);
+        this.state.micLevel += (rms - this.state.micLevel) * alpha;
+        const level = Math.max(0, this.state.micLevel);
+
+        // Always set a resting state first: the dot carries display:none from
+        // whenever the mic was last switched off.
         micPulseIndicator.style.display = 'inline-block';
-
-        if (volume > 1.5) {
-            const scale = 1 + (volume / 65);
-            micPulseIndicator.style.transform = `scale(${scale})`;
+        if (level > 1.5) {
+            micPulseIndicator.style.transform = `scale(${1 + level / 65})`;
             micPulseIndicator.style.backgroundColor = '#70ff9d';
         } else {
             micPulseIndicator.style.transform = 'scale(1)';
             micPulseIndicator.style.backgroundColor = '#4cd964';
+        }
+        if (micLevelFill) {
+            micLevelFill.style.width = Math.min(100, level * this.CONFIG.MIC.METER_SCALE) + '%';
         }
 
         requestAnimationFrame(() => this.runPulseAnimation());
@@ -706,7 +831,8 @@ SCORING: {
         let sum = 0;
         for (let i = 0; i < buf.length; i++) sum += buf[i] ** 2;
         const energy = Math.sqrt(sum / buf.length) * 100;
-        const pitch = this.autoCorrelate(buf, this.state.audioContext.sampleRate);
+        const { hz, clarity } = this.detectPitch(buf, this.state.audioContext.sampleRate);
+        this.state.pitchClarity = clarity;
 
         // A rest holds the meter exactly where it is. Points already earned for
         // singing stay earned: breathing between phrases, holding a note quietly,
@@ -724,18 +850,24 @@ SCORING: {
         const loudness = Math.min(Math.max((energy - S.VOICE_GATE) / S.LOUDNESS_SPAN, 0), 1);
         let points = S.VOICE_FLOOR + (1 - S.VOICE_FLOOR) * loudness;
 
-        if (pitch > 0) {
-            points *= S.PITCH_MULT;
+        if (hz > 0 && clarity >= S.CLARITY_GATE) {
+            // Blend from the "no pitch" penalty up to the full pitch bonus based on
+            // how periodic the waveform really is. A clear held note earns the lot;
+            // breathy or noisy syllables earn only part of it, so mere loudness can
+            // no longer be mistaken for singing on key.
+            const t = Math.min(Math.max((clarity - S.CLARITY_GATE) / (S.CLARITY_FULL - S.CLARITY_GATE), 0), 1);
+            points *= S.PITCHLESS_MULT + (S.PITCH_MULT - S.PITCHLESS_MULT) * t;
+
             // Track steadiness with a smoothed measure rather than a hard
             // threshold. Songs legitimately move between notes, so frame-to-frame
             // movement is normal; the EMA means an expressive melody is not
             // punished, while an untrackable pitch still loses ground.
             const cents = this.state.lastDetectedPitch > 0
-                ? 1200 * Math.abs(Math.log2(pitch / this.state.lastDetectedPitch))
+                ? 1200 * Math.abs(Math.log2(hz / this.state.lastDetectedPitch))
                 : 0;
             const jitterTarget = Math.min(cents / S.JITTER_SPAN, 1);
             this.state.pitchJitter += (jitterTarget - this.state.pitchJitter) * this.tickAlpha(S.JITTER_SMOOTHING);
-            this.state.lastDetectedPitch = pitch;
+            this.state.lastDetectedPitch = hz;
         } else {
             points *= S.PITCHLESS_MULT;
             this.state.pitchJitter += (1 - this.state.pitchJitter) * this.tickAlpha(S.JITTER_SMOOTHING);
@@ -766,10 +898,11 @@ SCORING: {
         this.elements.liveScoreValue.innerText = display;
     },
 
-    // Converts a per-second smoothing rate into the equivalent per-tick factor, so
-    // the scoring model behaves identically no matter what TICK_MS is set to.
-    tickAlpha(ratePerSecond) {
-        const seconds = this.CONFIG.SCORING.TICK_MS / 1000;
+    // Converts a per-second smoothing rate into the equivalent factor for the
+    // given interval. Defaults to the scoring tick; the pulse loop passes its own
+    // frame interval so the input meter is independent of TICK_MS.
+    tickAlpha(ratePerSecond, intervalMs) {
+        const seconds = (intervalMs == null ? this.CONFIG.SCORING.TICK_MS : intervalMs) / 1000;
         return 1 - Math.pow(1 - Math.min(Math.max(ratePerSecond, 0), 1), seconds);
     },
 
@@ -787,8 +920,12 @@ SCORING: {
         finalRank.innerText = rankData.label;
         finalRank.style.color = rankData.color;
         finalMessage.innerText = rankData.msg;
+        // Feeds the per-rank celebration styles in style.css.
+        scoreOverlay.dataset.rank = rankData.rank;
 
         scoreOverlay.classList.add('active');
+        // Freeze the floating island while the result screen is up.
+        if (this.elements.videoContainer) this.elements.videoContainer.classList.add('score-active');
         this.playScoreSound(rankData.rank);
         this.startFinalScoreTimer();
 
@@ -845,7 +982,11 @@ SCORING: {
         this.clearFinalScoreTimer();
         this.hidePlayGate();
         if (this.state.scoreAudio) this.state.scoreAudio.pause();
-        if (this.elements.scoreOverlay) this.elements.scoreOverlay.classList.remove('active');
+        if (this.elements.scoreOverlay) {
+            this.elements.scoreOverlay.classList.remove('active');
+            delete this.elements.scoreOverlay.dataset.rank;
+        }
+        if (this.elements.videoContainer) this.elements.videoContainer.classList.remove('score-active');
         this.state.isScoreRevealed = false;
     },
 
@@ -878,16 +1019,21 @@ SCORING: {
             performance: 0,
             lastDetectedPitch: 0,
             pitchJitter: 0,
+            pitchClarity: 0,
             voicedWarmupMs: 0
         });
         this.elements.scoreBarFill.style.width = "0%";
         this.elements.liveScoreValue.innerText = "0";
     },
 
-    // Autocorrelation pitch detection.
-    // Only lags long enough to represent a human voice are correlated, which both
-    // bounds the O(n^2) scan and stops noise from producing absurd long-period wins.
-    autoCorrelate(buffer, sampleRate) {
+    // Autocorrelation pitch detection with a clarity score.
+    //  * Only lags inside the vocal range are scanned (also bounds the O(n^2) work).
+    //  * Each lag is normalized by its overlap count, removing the classic bias
+    //    that pulled the peak toward short lags (i.e. an octave too high).
+    //  * Parabolic interpolation gives sub-sample accuracy, which is what makes
+    //    the frame-to-frame steadiness measurement meaningful.
+    // Returns { hz, clarity } with hz = -1 when no convincing pitch is found.
+    detectPitch(buffer, sampleRate) {
         const S = this.CONFIG.SCORING;
         const size = buffer.length;
         let rms = 0;
@@ -895,36 +1041,75 @@ SCORING: {
         rms = Math.sqrt(rms / size);
         // Use the same gate the scorer uses. Never report a pitch for silence or
         // room noise: a bogus reading would poison the steadiness comparison.
-        if (rms * 100 <= S.VOICE_GATE) return -1;
+        if (rms * 100 <= S.VOICE_GATE) return { hz: -1, clarity: 0 };
 
-        const maxLag = Math.min(size - 1, Math.floor(sampleRate / S.MIN_PITCH_HZ));
-        if (maxLag < 2) return -1;
+        // Scan starts at 2 so the descending slope at the very start of the
+        // correlation is available to be skipped. The final Hz check enforces
+        // MAX_PITCH_HZ, so a short-lag reading can never become a valid note.
+        const scanStart = 2;
+        const maxLag = Math.min(size - 2, Math.floor(sampleRate / S.MIN_PITCH_HZ));
+        if (maxLag <= scanStart) return { hz: -1, clarity: 0 };
 
-        let c = new Float32Array(maxLag + 1);
-        for (let lag = 0; lag <= maxLag; lag++) {
+        const c = new Float32Array(maxLag + 2);
+        for (let lag = scanStart; lag <= maxLag; lag++) {
             let sum = 0;
             const n = size - lag;
             for (let i = 0; i < n; i++) sum += buffer[i] * buffer[i + lag];
-            c[lag] = sum;
+            // Normalize by overlap so long lags are not unfairly penalised.
+            c[lag] = sum / n;
         }
 
-        // Skip the initial descent, then take the strongest remaining peak.
-        let d = 0;
-        while (d <= maxLag && c[d] > 0) d++;
-        let maxVal = -1, maxPeriod = -1;
-        for (let i = d; i <= maxLag; i++) {
-            if (c[i] > maxVal) { maxVal = c[i]; maxPeriod = i; }
+        const reference = rms * rms; // == normalized c[0], constant for any voice level
+        if (reference <= 0) return { hz: -1, clarity: 0 };
+
+        let globalMax = -Infinity;
+        for (let lag = scanStart; lag <= maxLag; lag++) {
+            if (c[lag] > globalMax) globalMax = c[lag];
         }
-        if (maxPeriod <= 0) return -1;
+        if (globalMax <= 0) return { hz: -1, clarity: 0 };
 
-        // Octave-error guard: a smooth waveform correlates as strongly at half
-        // its true period, which would report the note an octave too high.
-        // Corrected in that direction only, so harmonic-rich voices are untouched.
-        const doubled = maxPeriod * 2;
-        if (doubled <= maxLag && c[doubled] > c[maxPeriod] * 0.95) maxPeriod = doubled;
+        // Step over the initial descent: correlation starts high at tiny lags
+        // simply because the waveform overlaps itself, and those points are not
+        // real pitch candidates.
+        let start = scanStart;
+        while (start <= maxLag && c[start] > globalMax * 0.5) start++;
 
-        const freq = sampleRate / maxPeriod;
-        return (freq > S.MIN_PITCH_HZ && freq < S.MAX_PITCH_HZ) ? freq : -1;
+        // Pick the FIRST strong local peak. Taking the global maximum instead
+        // would happily settle on 2x or 3x the real period (an octave too low),
+        // because a periodic wave correlates at every multiple of its period.
+        const threshold = globalMax * S.PEAK_RATIO;
+        let bestLag = -1;
+        for (let lag = Math.max(start, scanStart + 1); lag <= maxLag; lag++) {
+            if (c[lag] >= threshold && c[lag] > c[lag - 1] &&
+                (lag === maxLag || c[lag] >= c[lag + 1])) {
+                bestLag = lag;
+                break;
+            }
+        }
+        if (bestLag < 0) return { hz: -1, clarity: 0 };
+
+        // Parabolic interpolation around the peak for a smoother period estimate.
+        let period = bestLag;
+        if (bestLag > scanStart && bestLag < maxLag) {
+            const y1 = c[bestLag - 1], y2 = c[bestLag], y3 = c[bestLag + 1];
+            const denom = y1 - 2 * y2 + y3;
+            if (denom !== 0) {
+                const delta = 0.5 * (y1 - y3) / denom;
+                if (Math.abs(delta) <= 1) period = bestLag + delta;
+            }
+        }
+        if (period <= 0) return { hz: -1, clarity: 0 };
+
+        const hz = sampleRate / period;
+        if (hz <= S.MIN_PITCH_HZ || hz >= S.MAX_PITCH_HZ) return { hz: -1, clarity: 0 };
+
+        const clarity = Math.max(0, Math.min(1, c[bestLag] / reference));
+        return { hz, clarity };
+    },
+
+    // Back-compat wrapper: older callers expected a bare number back.
+    autoCorrelate(buffer, sampleRate) {
+        return this.detectPitch(buffer, sampleRate).hz;
     },
 
     // Plays the celebration or failure audio clip.
@@ -933,7 +1118,13 @@ SCORING: {
         const sound = ['legendary', 'rockstar'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.CHEER : 
                       ['pro', 'amateur'].includes(rank) ? this.CONFIG.SOUND_EFFECTS.SUCCESS : this.CONFIG.SOUND_EFFECTS.FAIL;
         this.state.scoreAudio = new Audio(sound);
-        this.state.scoreAudio.volume = this.state.scoreBackgroundMusicVolume;
+        let vol = Number(this.state.scoreBackgroundMusicVolume);
+        if (isNaN(vol)) vol = 0.5;
+        // HTMLMediaElement.volume requires [0, 1]. If provided on a 0-10 or 0-100 scale, normalize safely.
+        if (vol > 1) {
+            vol = vol <= 10 ? vol / 10 : vol / 100;
+        }
+        this.state.scoreAudio.volume = Math.max(0, Math.min(1, vol));
         this.state.scoreAudio.play().catch(() => {});
     },
 
@@ -1388,6 +1579,7 @@ SCORING: {
         Array.from(list.children).forEach((row) => {
             const match = !query || (row.dataset.search || '').includes(query);
             row.hidden = !match;
+            if (!match) row.classList.remove('show-actions');
             if (match) visible += 1;
         });
 
@@ -1401,13 +1593,27 @@ SCORING: {
     },
 
     handleSongbookListClick(event) {
-        const button = event.target.closest('[data-songbook-action]');
-        if (!button) return;
-        const row = button.closest('.songbook-row');
+        const list = this.elements.songbookList;
+        const row = event.target.closest('.songbook-row');
         if (!row || !row.dataset.code) return;
+        const button = event.target.closest('[data-songbook-action]');
+
+        // On touch there is no hover, so the first tap reveals the actions
+        // instead of keeping two tiny buttons in the row at all times.
+        if (window.matchMedia('(hover: none)').matches && !button) {
+            const wasOpen = row.classList.contains('show-actions');
+            if (list) {
+                list.querySelectorAll('.songbook-row.show-actions')
+                    .forEach(r => r.classList.remove('show-actions'));
+            }
+            row.classList.toggle('show-actions', !wasOpen);
+            return;
+        }
+        if (!button) return;
 
         const playNow = button.dataset.songbookAction === 'play';
         button.disabled = true;
+        row.classList.remove('show-actions');
         this.runSongbookAction(row.dataset.code, playNow)
             .finally(() => { button.disabled = false; });
     },
@@ -1656,6 +1862,10 @@ SCORING: {
 
     attachEventListeners() {
         document.addEventListener('keydown', (e) => this.handleGlobalKeyDown(e));
+        // Mic sensitivity is a live control: apply the gain as the slider moves.
+        if (this.elements.micSensitivity) {
+            this.elements.micSensitivity.addEventListener('input', (e) => this.setMicSensitivity(e.target.value));
+        }
     },
 
     // Maps physical keys (Z, C, B, M, Q, F, P) to app actions.
@@ -1734,6 +1944,7 @@ SCORING: {
 // --- 11. Compatibility Layer ---
 // Exposes specific methods to the global window object for legacy HTML 'onclick' support.
 window.toggleVisualizer = () => KaraokeApp.toggleVisualizer();
+window.toggleMicPanel = (force) => KaraokeApp.toggleMicPanel(force);
 window.restartVideo = () => KaraokeApp.restartVideo();
 window.toggleFullscreen = () => KaraokeApp.toggleFullscreen();
 window.playVideo = () => KaraokeApp.state.player?.playVideo();

@@ -9,22 +9,24 @@ A premium, modern web-based Karaoke player designed with a sleek **Glassmorphism
 
 - **💎 Premium Glass UI:** Sophisticated glassmorphism design with blur effects, interactive shimmers, and smooth floating animations.
 - **🏝️ Dynamic Island Header:** A smart, sticky header that reacts to playback states and displays "Now Playing" information.
-- **🎙️ Hybrid Visualizer:** Real-time microphone audio visualization for singers, with an automatic "Simulation Mode" to keep the UI dynamic even when the mic is off.
-- **💯 Performance Scoring System:** Evaluates vocal energy and pitch steadiness in real time. Steady singing is rewarded and erratic pitch loses ground, while breathing between phrases is not punished. Includes a live floating score badge and a final overlay showing your rank (Legendary, Rockstar, Pro, Amateur, Beginner).
+- **🎙️ Tuned Microphone Input:** Real-time mic metering with a live input-level bar, a high-pass filter that removes rumble and handling noise, and a saved sensitivity control (🎚️ button) for quiet microphones. The pulse dot on the mic button reacts to your voice.
+- **💯 Performance Scoring System:** Evaluates vocal energy, pitch clarity and pitch steadiness in real time. Clear, steady singing is rewarded and erratic or breathy pitch loses ground, while breathing between phrases is not punished. Includes a live floating score badge and a final overlay showing your rank (Legendary, Rockstar, Pro, Amateur, Beginner).
 
 ### How the score is calculated
 Every 50ms (the `TICK_MS` setting in `SCORING`) the app takes one sample of the microphone:
 
 1. **Rest or voice?** Samples below the voice gate are ignored entirely — breathing between phrases cannot drag the score down.
 2. **How loud?** Energy above the gate maps to a credit that saturates, so a hotter microphone or a louder singer cannot simply buy a better score.
-3. **Is a note trackable?** A detectable pitch earns a bonus; untrackable noise is penalised.
+3. **Is the note clear?** A detectable pitch earns a bonus scaled by *clarity* (how periodic the waveform is). Breathy syllables and breath noise earn only part of the bonus, while a clean held note earns the full amount.
 4. **How steady?** Frame-to-frame pitch movement is tracked in *cents* with a smoothed moving average, so an expressive melody and natural vibrato are not punished while an untrackable pitch still loses ground.
 
-Those points feed a **rolling meter**, not a cumulative average: the displayed score follows how the singer is doing *right now*, rising as the phrases land and drifting down more slowly. Simply singing audibly earns a solid score, so volume, a trackable pitch and steadiness are bonuses rather than gates. The **final score is the peak the singer actually held**, so a quiet outro or a soft last line cannot erase a strong performance.
+Those points feed a **rolling meter**, not a cumulative average: the displayed score follows how the singer is doing *right now*, rising as the phrases land and drifting down more slowly. Simply singing audibly earns a solid score, so volume, a clear pitch and steadiness are bonuses rather than gates. The **final score is the peak the singer actually held**, so a quiet outro or a soft last line cannot erase a strong performance.
 
-Typical results: soft singing ≈ 77, ordinary singing ≈ 84, loud and steady ≈ 90+. All thresholds live in the `SCORING` block of `CONFIG` in `app.js` and can be retuned without touching the scoring logic.
+Typical results: soft singing ≈ 77, ordinary singing ≈ 84, loud/clear/steady ≈ 90+. Breathy or off-key singing now lands lower than it did before, because clarity and steadiness carry more weight. All thresholds live in the `SCORING` block of `CONFIG` in `app.js` and can be retuned without touching the scoring logic.
 
-Pitch is detected by autocorrelation over the vocal range only (60–1200Hz), with a half-period correction so smooth voices are not reported an octave too high. The microphone is captured with browser auto-gain disabled, so the level stays under the singer's control instead of being pumped up and down between phrases.
+Pitch is detected by **normalized autocorrelation** over the vocal range (70–1200Hz): each lag is divided by its overlap count so long lags are not unfairly penalised, the first strong local peak is chosen to avoid octave errors, and parabolic interpolation gives sub-sample accuracy. A sample only counts as pitched when its clarity clears `CLARITY_GATE`.
+
+Capture uses browser auto-gain disabled (no pumping between phrases), echo cancellation on (ignores the backing track from the speakers), and a 70Hz high-pass filter ahead of the analyser to remove rumble and HVAC hum. The signal chain is `source → high-pass → gain → analyser` and is never routed to the speakers, so there is no feedback. Sensitivity (0.5×–2.5×, default 1.0×) is saved in `localStorage`; open the 🎚️ button next to the mic to adjust it while the mic is on.
 
 - **🎉 Custom Score Sounds:** Plays celebration or feedback sounds (`scoreSound.mp3`) when a song ends.
 - **📋 Smart Queue System:** Add and manage songs with a beautiful "Up Next" card interface. The queue seamlessly auto-plays the next song the moment your score sound finishes.
